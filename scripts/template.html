@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>歌舞伎町 黏土微縮地圖</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#f3e6d6;font-family:system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;color:#3a2e2a}
+#c{position:fixed;inset:0}#lbl{position:fixed;inset:0;pointer-events:none}
+.pan{position:fixed;background:rgba(255,250,244,.93);border-radius:18px;box-shadow:0 6px 22px rgba(60,30,20,.18);backdrop-filter:blur(6px)}
+#brand{left:14px;top:14px;padding:10px 16px}#brand b{font-size:20px;display:block}#brand small{opacity:.65;font-size:12px}
+#side{right:14px;top:14px;width:250px;max-height:calc(100% - 120px);overflow:auto;padding:10px}
+#side input{width:100%;padding:8px 10px;border-radius:10px;border:1px solid #e3d3c3;margin-bottom:6px;font:inherit}
+.it{display:flex;gap:8px;align-items:center;padding:7px 8px;border-radius:10px;cursor:pointer;font-size:13px}.it:hover,.it.sel{background:#ffe6d4}
+.it i{font-style:normal;min-width:24px;height:22px;border-radius:11px;background:#e2583e;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+#hud{left:50%;transform:translateX(-50%);bottom:14px;padding:8px 10px;display:flex;gap:6px;align-items:center}
+#hud button,#tools button{border:0;background:#f4e6d8;border-radius:12px;padding:7px 10px;font:inherit;font-size:13px;cursor:pointer;color:#3a2e2a}#hud button.on,#tools button.on{background:#3a2e2a;color:#fff}
+#clock{font-weight:700;font-variant-numeric:tabular-nums;min-width:52px;text-align:center}
+#tools{left:14px;top:84px;display:flex;flex-direction:column;gap:6px;background:none;box-shadow:none;backdrop-filter:none}
+#card{left:14px;bottom:80px;width:320px;padding:14px 16px;display:none}#card.on{display:block}#card h3{margin:0 0 2px;font-size:17px}#card .en{opacity:.6;font-size:12px}#card p{font-size:13px;line-height:1.55;margin:8px 0}#card a{color:#c4452f;font-size:12px}#card .x{position:absolute;right:10px;top:8px;border:0;background:none;font-size:18px;cursor:pointer}
+#attr{position:fixed;right:8px;bottom:6px;font-size:11px;background:rgba(255,255,255,.8);padding:2px 7px;border-radius:6px;z-index:5}#attr a{color:#555}
+.lb{pointer-events:auto;cursor:pointer;background:#fffaf4;border-radius:14px;padding:3px 10px 3px 3px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);display:flex;gap:5px;align-items:center;transition:opacity .2s}
+.lb i{font-style:normal;background:#e2583e;color:#fff;border-radius:10px;min-width:22px;height:20px;font-size:11px;display:flex;align-items:center;justify-content:center}
+.lb.num{padding:3px}.lb.num span{display:none}.lb.hide{opacity:0;pointer-events:none}.lb.sel{outline:2px solid #e2583e}
+#load{position:fixed;inset:0;background:#f3e6d6;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:20;font-size:15px}#load pre{color:#b00;white-space:pre-wrap;max-width:90%}
+@media (max-width:700px){#side{display:none}#side.open{display:block;left:10px;right:10px;width:auto;top:70px;max-height:55%}#brand{padding:7px 12px}#brand b{font-size:16px}#tools{top:auto;bottom:80px;left:10px;flex-direction:column}#card{left:10px;right:10px;width:auto;bottom:76px}#hud{bottom:22px;max-width:calc(100% - 16px);flex-wrap:wrap;justify-content:center}#attr{bottom:2px;font-size:10px}}
+@media (min-width:701px){#listBtn{display:none}}
+</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<canvas id="c"></canvas><div id="lbl"></div>
+<div id="load"><div id="loadMsg">載入中…</div></div>
+<div id="brand" class="pan"><b id="tTitle">歌舞伎町</b><small id="tSub">新宿 · OSM 黏土微縮地圖</small></div>
+<div id="tools" class="pan"><button id="panoBtn">全景</button><button id="listBtn">清單</button><button id="langBtn">EN</button></div>
+<div id="side" class="pan"><input id="q" placeholder="搜尋地點…"><div id="list"></div></div>
+<div id="card" class="pan"><button class="x" id="cardX">×</button><h3 id="cN"></h3><div class="en" id="cE"></div><p id="cD"></p><a id="cL" target="_blank" rel="noopener"></a></div>
+<div id="hud" class="pan"><span id="clock">16:00</span><button data-t="360">06:00</button><button data-t="720">12:00</button><button data-t="1080">18:00</button><button data-t="1260">21:00</button><button id="playBtn">▶</button></div>
+<div id="attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · ODbL</div>
+<script type="application/json" id="DATA">__DATA__</script>
+<script type="module">
+__CODE__
+</script></body></html>
