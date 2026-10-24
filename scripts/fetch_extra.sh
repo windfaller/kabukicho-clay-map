@@ -1,0 +1,2 @@
+Q='[out:json][timeout:60];(way(102792887);relation(16562139););out geom;'
+for w in 15 30 60 90; do for u in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter; do curl -s -m 80 -A "kabukicho-diorama/1.1" --data-urlencode "data=$Q" $u -o extra_geom.json && python3 -c "import json;json.load(open('extra_geom.json'))" 2>/dev/null && echo OK && exit 0; done; sleep $w; done; echo FAIL
