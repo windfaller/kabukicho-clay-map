@@ -25,7 +25,7 @@ button,select{font:inherit;color:inherit}
 #keys{position:fixed;left:14px;bottom:8px;font-size:11px;opacity:.55}
 #attr{position:fixed;right:8px;bottom:6px;font-size:11px;background:rgba(255,255,255,.85);padding:2px 7px;border-radius:6px;z-index:5}#attr a{color:#555}
 .lb{pointer-events:auto;cursor:pointer;background:#fffaf4;border-radius:14px;padding:3px 10px 3px 3px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);display:flex;gap:5px;align-items:center;transition:opacity .25s}
-.lb.num{padding:3px}.lb.num span{display:none}.lb.hide{opacity:0;pointer-events:none}.lb.sel{outline:2px solid #e2583e}
+.lb.st{background:rgba(40,34,44,.72);color:#fff3e0;font-weight:500;font-size:11px;padding:2px 8px;border-radius:6px;box-shadow:none;letter-spacing:.03em}.lb.num{padding:3px}.lb.num span{display:none}.lb.hide{opacity:0;pointer-events:none}.lb.sel{outline:2px solid #e2583e}
 #load{position:fixed;inset:0;background:#f3e6d6;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:20;font-size:15px}#load pre{color:#b00;white-space:pre-wrap;max-width:90%}
 @media (max-width:700px){#side{display:none}#side.open{display:block;left:10px;right:10px;width:auto;top:66px;max-height:55%}#brand{padding:7px 12px}#brand b{font-size:16px}#tools{top:auto;bottom:84px;left:10px}#card{left:10px;right:10px;width:auto;bottom:84px}#hud{bottom:22px;max-width:calc(100% - 16px);flex-wrap:wrap;justify-content:center}#attr{bottom:2px;font-size:10px}#mmWrap{display:none}#compass{right:12px;top:14px;bottom:auto}#keys{display:none}#route{left:10px;right:10px;width:auto;top:66px}}
 @media (min-width:701px){#listBtn{display:none}}
@@ -35,7 +35,7 @@ button,select{font:inherit;color:inherit}
 <canvas id="c"></canvas><div id="lbl"></div>
 <div id="load">Loading… / 載入中…</div>
 <div id="brand" class="pan"><b id="tTitle">歌舞伎町</b><small id="tSub"></small></div>
-<div id="tools" class="pan"><button class="tb" id="panoBtn"></button><button class="tb" id="birdBtn"></button><button class="tb" id="routeBtn"></button><button class="tb" id="listBtn"></button><select id="langSel" aria-label="Language"><option value="zh">繁中</option><option value="en">EN</option><option value="ja">日本語</option></select></div>
+<div id="tools" class="pan"><button class="tb" id="panoBtn"></button><button class="tb" id="birdBtn"></button><button class="tb" id="tourBtn"></button><button class="tb" id="routeBtn"></button><button class="tb" id="listBtn"></button><select id="langSel" aria-label="Language"><option value="zh">繁中</option><option value="en">EN</option><option value="ja">日本語</option></select></div>
 <div id="route" class="pan"><label id="rFromL" for="rFrom"></label><select id="rFrom"></select><label id="rToL" for="rTo"></label><select id="rTo"></select><div class="row"><button id="rGo"></button><button id="rSwap"></button><button id="rClr"></button></div><div id="rRes" aria-live="polite"></div></div>
 <div id="side" class="pan"><input id="q" type="search"><div id="list"></div></div>
 <div id="card" class="pan" role="dialog"><button class="x" id="cardX" aria-label="close">×</button><h3 id="cN"></h3><div class="en" id="cE"></div><span class="cat" id="cC"></span><p id="cD"></p><p class="note" id="cNote"></p><div class="row"><button id="bFrom"></button><button id="bTo"></button></div><a id="cL" target="_blank" rel="noopener"></a></div>

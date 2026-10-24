@@ -140,6 +140,13 @@ for spec in want:
 ich=[e for e in E if e['type']=='way' and e.get('tags',{}).get('name')=='歌舞伎町一番街通り']
 ends=[N[i] for e in ich for i in (e['nodes'][0],e['nodes'][-1])]
 g=max(ends,key=lambda l:-l[0])
-meta={'src':'OpenStreetMap contributors (ODbL), Overpass API, fetched 2026-10-24','bbox':[S,W,Nn,Ea],'origin':[LAT0,LON0],'gate':[round(v,1) for v in P(g)],'stats':dict(stats,buildings=len(B),roads=len(R),nodes=len(nodes),rail=len(RL),areas=len(G),trees=len(trees),names=len(names),raw_bytes=len(raw),deflate_bytes=len(comp),b64_chars=len(b64))}
+cr=[e for e in E if e['type']=='way' and e.get('tags',{}).get('name')=='セントラルロード']
+g2=min([N[i] for e in cr for i in (e['nodes'][0],e['nodes'][-1])],key=lambda l:l[0])
+meta={'src':'OpenStreetMap contributors (ODbL), Overpass API, fetched 2026-10-24','bbox':[S,W,Nn,Ea],'origin':[LAT0,LON0],'gate':[round(v,1) for v in P(g)],'gate2':[round(v,1) for v in P(g2)],'stats':dict(stats,buildings=len(B),roads=len(R),nodes=len(nodes),rail=len(RL),areas=len(G),trees=len(trees),names=len(names),raw_bytes=len(raw),deflate_bytes=len(comp),b64_chars=len(b64))}
+from i18n_names import fill
+names=[fill(r) for r in names]
+for p in pois: p['nm']=fill(p['nm'])
+miss=[r[0] for r in names if '-' in r[4]]+[p['nm'][0] for p in pois if '-' in p['nm'][4]]
+print('untranslated:',miss)
 json.dump({'meta':meta,'names':names,'pois':pois,'bin':b64},open('data2.json','w'),ensure_ascii=False,separators=(',',':'))
 print(meta['stats'],'extra:',list(extra))
