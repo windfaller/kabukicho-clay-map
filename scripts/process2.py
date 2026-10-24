@@ -50,11 +50,26 @@ def ni(i):
   if i not in nodeIdx: nodeIdx[i]=len(nodes); nodes.append(tuple(q(v) for v in P(N[i])))
   return nodeIdx[i]
 RC={'primary':0,'secondary':0,'secondary_link':1,'tertiary':1,'unclassified':1,'residential':2,'living_street':2,'service':2,'pedestrian':3,'footway':4,'path':4,'steps':4}
+RW=[]
+GG_ALLEYS=('新宿ゴールデン街','あかるい花園','まねき通り')
+NAME_W={'歌舞伎町一番街通り':10,'花道通り':10,'区役所通り':14,'セントラルロード':10,'歌舞伎町さくら通り':8,'仲見世通り':6,'歌舞伎町東通り':9,'一番通り':7}
+DEF_W={'primary':20,'secondary':16,'secondary_link':8,'tertiary':12,'unclassified':7,'residential':5,'living_street':4,'service':4,'pedestrian':6,'footway':2.5,'path':2,'steps':2.5}
+def road_width(t):
+  n=t.get('name','')
+  try: return round(float(t['width'].split()[0]),1)
+  except Exception: pass
+  if n in NAME_W: return NAME_W[n]
+  if any(n.startswith(a) for a in GG_ALLEYS): return 2.4
+  if t.get('lanes'):
+    l=int(t['lanes'].split(';')[0]); return round(l*3.25+(2.5 if t.get('oneway')=='yes' else 4),1)
+  h=t['highway']; w=DEF_W[h]
+  return w*0.65 if t.get('oneway')=='yes' and h in('primary','secondary') else w
 B=[];R=[];RL=[];G=[];stats={'height_tag':0,'levels_tag':0,'fallback':0,'goldengai_override':0}
 seenB=set()
 for e in E:
   if e['type']!='way': continue
   t=e.get('tags',{}); nd=[i for i in e['nodes'] if i in N]
+  if 'building' in t and (t['building'] in('roof','gate') or t.get('location')=='underground' or t.get('layer','0').startswith('-')): stats['skipped_nonbuilding']=stats.get('skipped_nonbuilding',0)+1; continue
   if 'building' in t and len(nd)>=4:
     ll=[N[i] for i in nd]; c=(sum(a for a,b in ll)/len(ll),sum(b for a,b in ll)/len(ll))
     if not inb(c): continue
@@ -80,7 +95,8 @@ for e in E:
         cur=[]
     if len(cur)>1: segs.append(cur)
     keepname=t['highway'] not in('footway','steps','service','path') or t.get('name','').find('通り')>=0 or t.get('name','').find('街')>=0
-    for s in segs: R.append((RC[t['highway']],nm(t) if keepname else 0,s))
+    rw=road_width(t)
+    for s in segs: R.append((RC[t['highway']],nm(t) if keepname else 0,s)); RW.append(rw)
   elif t.get('railway')=='rail':
     pts=[P(N[i]) for i in nd if inb(N[i])]
     if len(pts)>1: RL.append((1,[(q(x),q(z)) for x,z in rdp(pts,.5)]))
@@ -148,5 +164,5 @@ names=[fill(r) for r in names]
 for p in pois: p['nm']=fill(p['nm'])
 miss=[r[0] for r in names if '-' in r[4]]+[p['nm'][0] for p in pois if '-' in p['nm'][4]]
 print('untranslated:',miss)
-json.dump({'meta':meta,'names':names,'pois':pois,'bin':b64},open('data2.json','w'),ensure_ascii=False,separators=(',',':'))
+json.dump({'meta':meta,'names':names,'pois':pois,'rw':[int(round(v*2)) for v in RW],'bin':b64},open('data2.json','w'),ensure_ascii=False,separators=(',',':'))
 print(meta['stats'],'extra:',list(extra))

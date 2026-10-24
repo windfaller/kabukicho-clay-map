@@ -38,7 +38,7 @@ async function decode(D) {
   O.trees = pts(); return O;
 }
 async function main() {
-const D = JSON.parse($('#DATA').textContent), O = await decode(D), NAMES = D.names;
+const D = JSON.parse($('#DATA').textContent), O = await decode(D), NAMES = D.names; O.r.forEach((r, k) => r.push(D.rw[k] / 2));
 const rname = i => i ? NAMES[i - 1] : null;
 /* ---------- renderer ---------- */
 const canvas = $('#c'), renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -48,19 +48,19 @@ renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.A
 const scene = new THREE.Scene(); scene.fog = new THREE.Fog('#f3e6d6', 900, 2600);
 const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 15, 6000); // tight near plane → stable depth
 const lr = new CSS2DRenderer({ element: $('#lbl') }); lr.setSize(innerWidth, innerHeight);
-const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; controls.dampingFactor = .09; controls.maxPolarAngle = 1.3; controls.minDistance = 45; controls.maxDistance = 1700; controls.screenSpacePanning = false;
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; controls.dampingFactor = .09; controls.maxPolarAngle = 1.3; controls.minDistance = 22; controls.maxDistance = 1700; controls.screenSpacePanning = false;
 const hemi = new THREE.HemisphereLight('#fff4e6', '#8a6f60', 1.2); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff0d8', 2.4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -400, right: 400, top: 400, bottom: -400, near: 200, far: 1500 }); sun.shadow.bias = -0.00025; sun.shadow.normalBias = .9; sun.target.position.set(0, 0, 0); scene.add(sun, sun.target);
 const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .35, .9); composer.addPass(bloom); composer.addPass(new OutputPass());
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .5, .35, .9); composer.addPass(bloom); composer.addPass(new OutputPass()); let bloomBase = .1;
 const skyU = { top: { value: C('#9fd0ec') }, hor: { value: C('#f7e6d3') } };
 scene.add(new THREE.Mesh(new THREE.SphereGeometry(3500, 24, 12), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
   vertexShader: 'varying vec3 p;void main(){p=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
   fragmentShader: 'uniform vec3 top,hor;varying vec3 p;void main(){float h=clamp(normalize(p).y*2.2,0.,1.);gl_FragColor=vec4(mix(hor,top,h),1.);}' })));
 /* ---------- materials ---------- */
 const U = { night: { value: 0 }, time: { value: 0 } };
-function neonMat(day = .15, nightK = 2.6) { const m = new THREE.MeshStandardMaterial({ roughness: .5 }); m.onBeforeCompile = s => { s.uniforms.uNight = U.night; s.fragmentShader = 'uniform float uNight;\n' + s.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance += vColor * (${day.toFixed(2)} + uNight * ${nightK.toFixed(2)});\n#endif`); }; m.customProgramCacheKey = () => 'neon' + day + nightK; return m; }
+function neonMat(day = .15, nightK = 1.8) { const m = new THREE.MeshStandardMaterial({ roughness: .5 }); m.onBeforeCompile = s => { s.uniforms.uNight = U.night; s.fragmentShader = 'uniform float uNight;\n' + s.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance += vColor * (${day.toFixed(2)} + uNight * ${nightK.toFixed(2)});\n#endif`); }; m.customProgramCacheKey = () => 'neon' + day + nightK; return m; }
 const clay = new THREE.MeshStandardMaterial({ roughness: .85 });
 const bldMat = new THREE.MeshStandardMaterial({ roughness: .82, vertexColors: true });
 bldMat.onBeforeCompile = s => {
@@ -89,7 +89,7 @@ const GEO = { box: new THREE.BoxGeometry(1, 1, 1), rbox: new RoundedBoxGeometry(
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new V3(), _p = new V3();
 function M(x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) { _e.set(rx, ry, rz, 'YXZ'); _q.setFromEuler(_e); return _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)); }
 function put(kind, geo, mat, m, color, shadow = true) { (kit[kind] ||= { geo, mat, list: [], shadow }).list.push([m.clone(), C(color)]); }
-function finalizeKit() { for (const k in kit) { const g = kit[k]; const im = new THREE.InstancedMesh(g.geo, g.mat, g.list.length); g.list.forEach(([m, c], i) => { im.setMatrixAt(i, m); im.setColorAt(i, c); }); im.castShadow = g.shadow; im.receiveShadow = true; im.matrixAutoUpdate = false; scene.add(im); g.im = im; } }
+function finalizeKit() { for (const k in kit) { const g = kit[k]; const im = new THREE.InstancedMesh(g.geo, g.mat, g.list.length); g.list.forEach(([m, c], i) => { im.setMatrixAt(i, m); im.setColorAt(i, c); }); g.im = im; im.castShadow = g.shadow; im.receiveShadow = true; im.matrixAutoUpdate = false; scene.add(im); g.im = im; } }
 /* ---------- board ---------- */
 const BX = 372, BZ = 345;
 const board = new THREE.Mesh(new RoundedBoxGeometry(BX * 2, 16, BZ * 2, 3, 6), new THREE.MeshStandardMaterial({ color: '#e9d6bf', roughness: .95 })); board.position.y = -8; board.receiveShadow = true; scene.add(board);
@@ -102,18 +102,18 @@ function strip(pts, w, y) { const pos = [], idx = []; for (let i = 0; i < pts.le
 function discGeo(x, z, r, y) { const g = new THREE.CircleGeometry(r, 12); g.rotateX(-Math.PI / 2); g.translate(x, y, z); return g; }
 const roadGeos = [[], [], [], [], []], adj = new Map(), carAdj = new Map(), deg = new Map(), namedRoads = {};
 const link = (A, a, b, w) => { if (!A.has(a)) A.set(a, []); if (!A.has(b)) A.set(b, []); A.get(a).push([b, w]); A.get(b).push([a, w]); };
-O.r.forEach(([cls, ni, seq]) => {
-  const pts = seq.map(i => nodes[i]); const wide = ni && NAMES[ni - 1][0] === '靖国通り' ? 24 : W[cls]; roadGeos[cls].push(strip(pts, wide, Y.road[cls]));
+O.r.forEach(([cls, ni, seq, wide]) => {
+  const pts = seq.map(i => nodes[i]); roadGeos[cls].push(strip(pts, wide, Y.road[cls]));
   if (cls < 4) seq.forEach(i => roadGeos[cls].push(discGeo(nodes[i][0], nodes[i][1], wide / 2, Y.road[cls])));
   for (let i = 0; i < seq.length - 1; i++) { const a = seq[i], b = seq[i + 1], L = Math.hypot(nodes[a][0] - nodes[b][0], nodes[a][1] - nodes[b][1]); link(adj, a, b, L); if (cls <= 1) link(carAdj, a, b, L); }
   seq.forEach(i => deg.set(i, (deg.get(i) || 0) + 1));
-  if (ni) (namedRoads[NAMES[ni - 1][0]] ||= []).push(pts);
+  if (ni) (namedRoads[NAMES[ni - 1][0]] ||= []).push(Object.assign(pts, { w: wide }));
 });
 roadGeos.forEach((gs, cls) => { if (!gs.length) return; const g = mergeGeometries(gs.map(g => { g = g.index ? g.toNonIndexed() : g; g.deleteAttribute('uv'); g.deleteAttribute('normal'); return g; })); g.computeVertexNormals(); const m = new THREE.Mesh(g, gmat(RCOL[cls], 2 + (4 - cls))); m.receiveShadow = true; m.matrixAutoUpdate = false; scene.add(m); });
 const markMat = gmat('#f6f1e6', 8);
-O.r.forEach(([cls, , seq]) => { if (cls > 1) return; for (let i = 0; i < seq.length - 1; i++) { const [ax, az] = nodes[seq[i]], [bx, bz] = nodes[seq[i + 1]]; const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az);
+O.r.forEach(([cls, , seq, rw]) => { if (cls > 1) return; for (let i = 0; i < seq.length - 1; i++) { const [ax, az] = nodes[seq[i]], [bx, bz] = nodes[seq[i + 1]]; const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az);
   if (cls === 0) for (let s = 4; s < L - 4; s += 9) put('mark', GEO.box, markMat, M(ax + (bx - ax) * s / L, Y.mark, az + (bz - az) * s / L, .5, .02, 4, ang), '#f6f1e6', false);
-  [0, 1].forEach(e => { const n = seq[i + e]; if ((deg.get(n) || 0) >= 3 && L > 16) { const t = e ? (L - 7) / L : 7 / L; for (let k = -3; k <= 3; k++) { const px = ax + (bx - ax) * t + Math.cos(ang) * k * 1.6 * W[cls] / 10, pz = az + (bz - az) * t - Math.sin(ang) * k * 1.6 * W[cls] / 10; put('mark', GEO.box, markMat, M(px, Y.mark, pz, .8, .02, 3.2, ang), '#fbf8f0', false); } } }); } });
+  [0, 1].forEach(e => { const n = seq[i + e]; if ((deg.get(n) || 0) >= 3 && L > 16) { const t = e ? (L - 7) / L : 7 / L; for (let k = -3; k <= 3; k++) { const px = ax + (bx - ax) * t + Math.cos(ang) * k * 1.6 * rw / 10, pz = az + (bz - az) * t - Math.sin(ang) * k * 1.6 * rw / 10; put('mark', GEO.box, markMat, M(px, Y.mark, pz, .8, .02, 3.2, ang), '#fbf8f0', false); } } }); } });
 /* rail + station canopies */
 const railGeos = [];
 const stPoi = D.pois.find(p => p.id === 'node/6283010875');
@@ -181,6 +181,7 @@ const signs = [];
   for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2; put('crownFin', GEO.rbox, neon, M(info.cx + Math.cos(a) * sT * .42, topY + 6, info.cz + Math.sin(a) * sT * .42, 1, 14, 3.2, -a, 0, .32), k % 2 ? '#9fe6ff' : '#e6f6ff'); }
   put('crownCore', GEO.cyl, neon, M(info.cx, topY + 3, info.cz, sT * .5, 6, sT * .5), '#cfefff'); for (let k = 0; k < 3; k++) put('crownRing', GEO.disc, neon, M(info.cx, topY - 4 - k * 9, info.cz, sT * 1.15, .7, sT * 1.15), ['#ff5fd2', '#7fe0ff', '#ffd23d'][k], false); textSign([['東急歌舞伎町タワー', 64]], 640, 96, '#1b1f3a', '#bfe8ff', info.cx, 30, info.cz + base * .62, 0, 22, 3.3);
   LMK.tower = { x: info.cx, z: info.cz, y: topY + 14 }; });
+const gzLight = new THREE.SpotLight('#cfe4ff', 0, 70, .6, .5, 0);
 /* --- Landmark: Shinjuku Toho Building + stylised Godzilla head on the building edge facing Cinecity --- */
 (LMK[4] || []).forEach(info => { const plaza = D.pois.find(p => p.k === 'plaza') || { x: info.cx - 50, z: info.cz }; let bi = 0, bd = 1e9; info.pts.forEach((p, i) => { const d = Math.hypot(p[0] - plaza.x, p[1] - plaza.z); if (d < bd) { bd = d; bi = i; } });
   const [vx, vz] = info.pts[bi]; const gx = vx + (info.cx - vx) * .18, gz = vz + (info.cz - vz) * .18, gy = info.hv, face = Math.atan2(plaza.x - gx, plaza.z - gz);
@@ -192,9 +193,10 @@ const signs = [];
   P('gz', GEO.rbox, clay, 5.5, 0, 8.6, 5.4, 3.4, 6, G); // snout
   P('gz', GEO.rbox, clay, 4.6, 0, 5.6, 5, 1.6, 6.5, '#4f5a4a', .35); // open jaw
   P('gzT', GEO.box, clay, 7.6, 0, 7.0, .6, .9, 4.8, '#f3efe2'); P('gzT', GEO.box, clay, 6.8, 0, 6.4, .6, .8, 4.6, '#f3efe2');
-  [-1.9, 1.9].forEach(u => P('gzE', GEO.sph, neon, 3.2, u, 10.6, 1.2, .8, 1.2, '#ffd23d'));
+  [-1.9, 1.9].forEach(u => { P('gzE', GEO.sph, neon, 3.4, u, 10.6, 1.5, 1, 1.5, '#fff27a'); P('gzE', GEO.box, neon, 3.9, u, 11.6, .4, .3, 2.2, '#ff5a2a'); });
+  { const [lx, ly, lz] = at(14, 0, 4); gzLight.position.set(lx, ly, lz); const [tx, ty, tz] = at(0, 0, 8); gzLight.target.position.set(tx, ty, tz); scene.add(gzLight, gzLight.target); }
   for (let k = 0; k < 5; k++) P('gzS', GEO.cone, clay, -2.5 - k * 2.2, 0, 12.5 - k * 1.6, 1.4, 4 - k * .4, 3, '#d9d4c4');
-  LMK.godzilla = { x: gx, z: gz, y: gy + 26 }; });
+  LMK.godzilla = { x: gx, z: gz, y: gy + 26, face: [sx, sz] }; });
 /* --- Don Quijote + PePe + Prince hotel generic signage (text only) --- */
 function facadeSign(info, text, bg, fg, y) { const ei = edgeFacing(info.pts); if (ei < 0) return; const f = edgeFrame(info.pts, ei); const w = Math.min(f.L * .85, 26); textSign([[text, 70]], 1024, 128, bg, fg, f.mx + f.nx * .9, y, f.mz + f.nz * .9, Math.atan2(f.nx, f.nz), w, w / 8); }
 (LMK[5] || []).forEach(info => { facadeSign(info, 'ドン・キホーテ', '#f6d23a', '#d4202c', Math.min(info.hv - 3, 20)); for (let k = 0; k < 6; k++) put('blade', GEO.rbox, neon, M(info.cx + (k - 2.5) * 2.4, info.hv + 2, info.cz, 1.8, 3.4, .6), k % 2 ? '#ffd23d' : '#ff3344'); });
@@ -206,12 +208,12 @@ const gate = D.meta.gate, gate2 = D.meta.gate2;
 function roadDir(name, p) { let dir = 0, bd = 1e9; (namedRoads[name] || []).forEach(q => q.forEach((v, i) => { const d = Math.hypot(v[0] - p[0], v[1] - p[1]); const w = q[i + 1] || q[i - 1]; if (d < bd && w) { bd = d; dir = q[i + 1] ? Math.atan2(w[0] - v[0], w[1] - v[1]) : Math.atan2(v[0] - w[0], v[1] - w[1]); } })); return dir; }
 function glowSign(text, sub, w, h, bg, fg, glow) { const cv = document.createElement('canvas'); cv.width = 1024; cv.height = Math.round(1024 * h / w); const c = cv.getContext('2d'), H = cv.height;
   c.fillStyle = bg; c.fillRect(0, 0, 1024, H); c.strokeStyle = fg; c.lineWidth = H * .05; c.strokeRect(H * .06, H * .06, 1024 - H * .12, H - H * .12);
-  c.textAlign = 'center'; c.textBaseline = 'middle'; const fs = Math.min(H * (sub ? .5 : .62), 1024 * .86 / text.length); c.font = `900 ${fs}px "Hiragino Mincho ProN","Noto Serif CJK JP","Noto Sans CJK JP",serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle'; let fs = Math.min(H * (sub ? .5 : .62), 1024 * .86 / text.length); const FF = '"Hiragino Mincho ProN","Noto Serif CJK JP","Noto Sans CJK JP",serif'; c.font = `900 ${fs}px ${FF}`; const tw = c.measureText(text).width; if (tw > 1024 * .84) { fs *= 1024 * .84 / tw; c.font = `900 ${fs}px ${FF}`; }
   c.shadowColor = glow; c.shadowBlur = H * .12; c.fillStyle = fg; for (let k = 0; k < 2; k++) c.fillText(text, 512, H * (sub ? .42 : .52)); c.shadowBlur = 0; c.fillStyle = '#ffffff'; c.globalAlpha = .55; c.fillText(text, 512, H * (sub ? .42 : .52)); c.globalAlpha = 1;
   if (sub) { c.font = `700 ${H * .16}px sans-serif`; c.fillStyle = fg; c.fillText(sub, 512, H * .8); }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); signs.push(mat); return mat; }
 function inward(g, name, k) { const pts = (namedRoads[name] || []).flat().filter(p => Math.hypot(p[0] - g[0], p[1] - g[1]) < 120); let mx = 0, mz = 0; pts.forEach(p => { mx += p[0]; mz += p[1]; }); mx /= pts.length || 1; mz /= pts.length || 1; let dx = mx - g[0], dz = mz - g[1]; const L = Math.hypot(dx, dz) || 1; return [g[0] + dx / L * k, g[1] + dz / L * k, dx / L, dz / L]; }
-function heroGate(p, dir, half, text, sub, frameCol, bg, fg, glow, bulbCol) { const [gx, gz] = p, nx = Math.cos(dir), nz = -Math.sin(dir), fx = Math.sin(dir), fz = Math.cos(dir), H = 22, SW = half * 2 - 1.5, SH = 6.4, SY = H - 1.6;
+function heroGate(p, dir, half, text, sub, frameCol, bg, fg, glow, bulbCol) { const [gx, gz] = p, nx = Math.cos(dir), nz = -Math.sin(dir), fx = Math.sin(dir), fz = Math.cos(dir), H = 16, SW = half * 2 - 1.6, SH = Math.max(2.8, SW * .34), SY = H - 1.4 - SH / 2 + 1.6;
   [-1, 1].forEach(s => { const px = gx + nx * half * s, pz = gz + nz * half * s; put('gatePost', GEO.box, clay, M(px, H / 2, pz, 1.6, H, 1.6, dir), frameCol); put('gateFoot', GEO.rbox, clay, M(px, 1, pz, 2.8, 2, 2.8, dir), '#3a2e2c');
     for (let y = 2; y < H - 4; y += 1.6) put('gateBulb', GEO.sph, neon, M(px + fx * .9, y, pz + fz * .9, .55, .55, .55), bulbCol, false), put('gateBulb', GEO.sph, neon, M(px - fx * .9, y, pz - fz * .9, .55, .55, .55), bulbCol, false); });
   put('gateBeam', GEO.box, clay, M(gx, H + .6, gz, half * 2 + 3, 1.2, 1.8, dir), frameCol); put('gateBeam', GEO.box, clay, M(gx, SY - SH / 2 - .5, gz, half * 2 + .4, .7, 1.2, dir), frameCol);
@@ -220,10 +222,11 @@ function heroGate(p, dir, half, text, sub, frameCol, bg, fg, glow, bulbCol) { co
   const mat = glowSign(text, sub, SW, SH, bg, fg, glow); [1, -1].forEach(s => { const pl = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), mat); pl.position.set(gx + fx * .65 * s, SY, gz + fz * .65 * s); pl.rotation.y = dir + (s > 0 ? 0 : Math.PI); scene.add(pl); });
   const nb = 26; for (let k = 0; k <= nb; k++) { const u = (k / nb - .5) * (SW + .4); [1, -1].forEach(s => [SH / 2 + .25, -SH / 2 - .25].forEach(v => put('gateBulb', GEO.sph, neon, M(gx + nx * u + fx * .75 * s, SY + v, gz + nz * u + fz * .75 * s, .42, .42, .42), bulbCol, false))); }
   for (let k = 0; k <= 6; k++) { const v = (k / 6 - .5) * SH; [1, -1].forEach(s => [-1, 1].forEach(e => put('gateBulb', GEO.sph, neon, M(gx + nx * e * (SW / 2 + .25) + fx * .75 * s, SY + v, gz + nz * e * (SW / 2 + .25) + fz * .75 * s, .42, .42, .42), bulbCol, false))); }
-  return { x: gx, z: gz, dir, dx: p[2], dz: p[3] }; }
-const gA = inward(gate, '歌舞伎町一番街通り', 15), gB = inward(gate2, 'セントラルロード', 15);
-LMK.gate = heroGate(gA, roadDir('歌舞伎町一番街通り', gA), 11, '歌舞伎町一番街', '', '#c8141e', '#7a0710', '#ffe9a8', '#ff3a20', '#ffd98a');
-LMK.gate2 = heroGate(gB, roadDir('セントラルロード', gB), 6.5, '歌舞伎町セントラルロード', 'KABUKICHO CENTRAL ROAD', '#2f3a8f', '#0b1640', '#9fe8ff', '#2aa8ff', '#e8f6ff');
+  return { x: gx, z: gz, dir, dx: p[2], dz: p[3], span: half * 2, H, SY, SW, SH }; }
+function roadW(name, p) { let w = 10, bd = 1e9; (namedRoads[name] || []).forEach(q => q.forEach(v => { const d = Math.hypot(v[0] - p[0], v[1] - p[1]); if (d < bd) { bd = d; w = q.w; } })); return w; }
+const gA = inward(gate, '歌舞伎町一番街通り', 10), gB = inward(gate2, 'セントラルロード', 10);
+LMK.gate = heroGate(gA, roadDir('歌舞伎町一番街通り', gA), roadW('歌舞伎町一番街通り', gA) / 2 + .8, '歌舞伎町一番街', '', '#c8141e', '#7a0710', '#ffe9a8', '#ff3a20', '#ffd98a');
+LMK.gate2 = heroGate(gB, roadDir('セントラルロード', gB), roadW('セントラルロード', gB) / 2 + .8, '歌舞伎町セントラルロード', 'KABUKICHO CENTRAL ROAD', '#2f3a8f', '#0b1640', '#9fe8ff', '#2aa8ff', '#e8f6ff');
 /* --- Hanazono shrine: torii at the grounds edge nearest 明治通り + hall --- */
 (areasByT[2] || []).forEach(pts => { const meiji = (namedRoads['明治通り'] || []).flat(); let bi = 0, bd = 1e9; pts.forEach((p, i) => meiji.forEach(m => { const d = Math.hypot(p[0] - m[0], p[1] - m[1]); if (d < bd) { bd = d; bi = i; } }));
   let cx = 0, cz = 0; pts.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= pts.length; cz /= pts.length; const [ex, ez] = pts[bi]; const tx = ex + (cx - ex) * .12, tz = ez + (cz - ez) * .12, a = Math.atan2(cx - tx, cz - tz), nx = Math.cos(a), nz = -Math.sin(a);
@@ -233,25 +236,25 @@ LMK.gate2 = heroGate(gB, roadDir('セントラルロード', gB), 6.5, '歌舞�
   LMK.torii = { x: tx, z: tz }; });
 /* lantern strings (Golden Gai, Ichibangai, Sakura-dori, Omoide-yokocho …) */
 const LANT = ['新宿ゴールデン街 G1通り', '新宿ゴールデン街 G2通り', '歌舞伎町一番街通り', '歌舞伎町さくら通り', 'あかるい花園一番街', 'あかるい花園三番街', 'あかるい花園五番街', '思い出横丁', 'あかるい花園八番街', '歌舞伎町東通り'];
-LANT.forEach(nm => (namedRoads[nm] || []).forEach(pts => { let acc = 0; const sp = nm.includes('ゴールデン') || nm.includes('花園') ? 6 : 10, half = nm.includes('ゴールデン') || nm.includes('花園') ? 2.4 : 5.5; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1]; const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az), nx = Math.cos(ang), nz = -Math.sin(ang);
+LANT.forEach(nm => (namedRoads[nm] || []).forEach(pts => { let acc = 0; const sp = nm.includes('ゴールデン') || nm.includes('花園') ? 6 : 10, half = Math.max(.9, (pts.w || 10) / 2 - .4); for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1]; const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az), nx = Math.cos(ang), nz = -Math.sin(ang);
   for (let s = (sp - acc % sp); s < L; s += sp) { const px = ax + (bx - ax) * s / L, pz = az + (bz - az) * s / L; for (let k = 0; k <= 4; k++) { const u = k / 4 * 2 - 1; put('lantern', GEO.sph, neon, M(px + nx * u * half, 6.2 - (1 - u * u) * 1, pz + nz * u * half, .9, 1.3, .9), k % 2 ? '#ff4b3d' : '#ffb347', false); } }
   acc += L; } }));
 /* streetlights, trees, vending machines */
-O.r.forEach(([cls, , seq]) => { if (cls > 2) return; let acc = 0; for (let i = 0; i < seq.length - 1; i++) { const [ax, az] = nodes[seq[i]], [bx, bz] = nodes[seq[i + 1]]; const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az), nx = Math.cos(ang), nz = -Math.sin(ang), sp = cls === 0 ? 26 : 34;
-  for (let s = (sp - acc % sp); s < L; s += sp) { const side = ((acc + s) / sp | 0) % 2 ? 1 : -1, o = W[cls] / 2 + .8; const px = ax + (bx - ax) * s / L + nx * o * side, pz = az + (bz - az) * s / L + nz * o * side; put('pole', GEO.cyl, clay, M(px, 3.6, pz, .3, 7.2, .3), '#5d5a60'); put('lamp', GEO.sph, neon, M(px, 7.3, pz, 1, .7, 1), '#ffe2a8', false); if (cls === 0 && rnd() < .5) { put('trunk', GEO.cyl, clay, M(px + (bx - ax) / L * 8, 1.5, pz + (bz - az) / L * 8, .5, 3, .5), '#8a6248'); put('tree', GEO.sph, clay, M(px + (bx - ax) / L * 8, 5, pz + (bz - az) / L * 8, 4.2, 4.6, 4.2), ['#7fae5e', '#6d9e52', '#8dbb68'][i % 3]); } if (cls === 2 && rnd() < .3) put('vend', GEO.rbox, neon, M(px + (bx - ax) / L * 3, 1, pz + (bz - az) / L * 3, 1, 2, .8, ang), ['#e8f4ff', '#ffefe0', '#ff6b6b'][i % 3]); }
+O.r.forEach(([cls, , seq, rw]) => { if (cls > 2) return; let acc = 0; for (let i = 0; i < seq.length - 1; i++) { const [ax, az] = nodes[seq[i]], [bx, bz] = nodes[seq[i + 1]]; const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az), nx = Math.cos(ang), nz = -Math.sin(ang), sp = cls === 0 ? 26 : 34;
+  for (let s = (sp - acc % sp); s < L; s += sp) { const side = ((acc + s) / sp | 0) % 2 ? 1 : -1, o = rw / 2 + .8; const px = ax + (bx - ax) * s / L + nx * o * side, pz = az + (bz - az) * s / L + nz * o * side; put('pole', GEO.cyl, clay, M(px, 3.6, pz, .3, 7.2, .3), '#5d5a60'); put('lamp', GEO.sph, neon, M(px, 7.3, pz, 1, .7, 1), '#ffe2a8', false); if (cls === 0 && rnd() < .5) { put('trunk', GEO.cyl, clay, M(px + (bx - ax) / L * 8, 1.5, pz + (bz - az) / L * 8, .5, 3, .5), '#8a6248'); put('tree', GEO.sph, clay, M(px + (bx - ax) / L * 8, 5, pz + (bz - az) / L * 8, 4.2, 4.6, 4.2), ['#7fae5e', '#6d9e52', '#8dbb68'][i % 3]); } if (cls === 2 && rnd() < .3) put('vend', GEO.rbox, neon, M(px + (bx - ax) / L * 3, 1, pz + (bz - az) / L * 3, 1, 2, .8, ang), ['#e8f4ff', '#ffefe0', '#ff6b6b'][i % 3]); }
   acc += L; } });
 O.trees.forEach(([x, z], i) => { put('trunk', GEO.cyl, clay, M(x, 1.5, z, .6, 3, .6), '#8a6248'); put('tree', GEO.sph, clay, M(x, 5, z, 4.5, 5, 4.5), ['#7fae5e', '#6d9e52', '#8dbb68'][i % 3]); });
 (areasByT[0] || []).forEach(f => { let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9; f.forEach(([x, z]) => { minx = Math.min(minx, x); maxx = Math.max(maxx, x); minz = Math.min(minz, z); maxz = Math.max(maxz, z); }); for (let k = 0; k < 40; k++) { const x = minx + rnd() * (maxx - minx), z = minz + rnd() * (maxz - minz); if (!inPoly(x, z, f)) continue; put('trunk', GEO.cyl, clay, M(x, 1.5, z, .6, 3, .6), '#8a6248'); put('tree', GEO.sph, clay, M(x, 5.5, z, 5, 5.5, 5), ['#7fae5e', '#6d9e52', '#8dbb68'][k % 3]); } });
 for (let k = 0; k < 220; k++) { const a = rnd() * Math.PI * 2, r = 480 + rnd() * 700; const x = Math.cos(a) * r, z = Math.sin(a) * r * .9; const h = 6 + rnd() * 40 * (r < 700 ? 1.4 : .7); put('far', GEO.rbox, clay, M(x, h / 2 - 16, z, 18 + rnd() * 24, h, 18 + rnd() * 24, rnd()), ['#e2cbb4', '#d9c0aa', '#ead8c4'][k % 3]); }
 /* --- night-city layer: stacked vertical signboards, rooftop billboards, LED screens, wet-street reflections --- */
 const CORE_ST = ['歌舞伎町一番街通り', 'セントラルロード', '歌舞伎町さくら通り', '花道通り', '歌舞伎町東通り', '一番通り', '仲見世通り', '靖国通り', '西武新宿駅前通り'];
-const coreSamples = []; CORE_ST.forEach(n => (namedRoads[n] || []).forEach(pts => { for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az); for (let s = 0; s < L; s += 3) coreSamples.push([ax + (bx - ax) * s / L, az + (bz - az) * s / L, n]); } }));
+const coreSamples = []; CORE_ST.forEach(n => (namedRoads[n] || []).forEach(pts => { for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az); const ang = Math.atan2(bx - ax, bz - az); for (let s = 0; s < L; s += 3) coreSamples.push([ax + (bx - ax) * s / L, az + (bz - az) * s / L, n, ang, pts.w || 8]); } }));
 const nearCore = (x, z, r) => coreSamples.some(p => Math.abs(p[0] - x) < r && Math.abs(p[1] - z) < r && Math.hypot(p[0] - x, p[1] - z) < r);
 const r2 = mulberry32(77), ledTargets = [];
 const nearGate = (x, z) => [LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - x, g.z - z) < 30);
 bldInfo.forEach(info => { if (info.kind >= 3 || info.kind === 7 || info.hv < 8 || !nearCore(info.cx, info.cz, 34)) return; const ng = nearGate(info.cx, info.cz); const ei = edgeFacing(info.pts); if (ei < 0) return; const f = edgeFrame(info.pts, ei);
   const cols = 1 + (f.L > 12 ? 1 : 0) + (f.L > 22 ? 1 : 0);
-  for (let c = 0; c < cols; c++) { const t = (c + .5) / cols, px = f.a[0] + (f.b[0] - f.a[0]) * t + f.nx * 1.6, pz = f.a[1] + (f.b[1] - f.a[1]) * t + f.nz * 1.6; let y = 4.6; const top = Math.min(info.hv - 1, 34);
+  for (let c = 0; c < cols; c++) { const t = (c + .5) / cols, px = f.a[0] + (f.b[0] - f.a[0]) * t + f.nx * 1.6, pz = f.a[1] + (f.b[1] - f.a[1]) * t + f.nz * 1.6; if ([LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - px, g.z - pz) < 22)) continue; let y = 4.6; const top = Math.min(info.hv - 1, 34);
     while (y < top - 2) { const h = 2 + r2() * 3.2; if (y + h > top) break; put('stack', GEO.box, neon, M(px, y + h / 2, pz, .8, h, 2.4, f.ang + Math.PI / 2), NEON[Math.floor(r2() * NEON.length)]); put('stackF', GEO.box, clay, M(px - f.nx * .2, y + h / 2, pz - f.nz * .2, .5, h + .3, 2.8, f.ang + Math.PI / 2), '#3a3238'); y += h + .35; } }
   if (!ng && info.hv > 12 && r2() < .55) { const w = Math.min(f.L * .7, 16), bx = info.cx + f.nx * 2, bz = info.cz + f.nz * 2; [-1, 1].forEach(s => put('pole', GEO.cyl, clay, M(bx + Math.cos(f.ang) * w * .4 * s, info.hv + 2, bz - Math.sin(f.ang) * w * .4 * s, .35, 4, .35), '#4a4448'));
     put('roofbill', GEO.box, neon, M(bx, info.hv + 6, bz, w, 4.5, .6, f.ang + Math.PI), NEON[Math.floor(r2() * NEON.length)]); put('roofbillF', GEO.box, clay, M(bx - f.nx * .35, info.hv + 6, bz - f.nz * .35, w + .6, 5.1, .4, f.ang + Math.PI), '#1e1a22'); }
@@ -273,8 +276,8 @@ bldInfo.forEach(info => { if (info.kind !== 7) return; const ei = edgeFacing(inf
 const rcv = document.createElement('canvas'); rcv.width = rcv.height = 64; { const c = rcv.getContext('2d'), g = c.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.4, 'rgba(255,255,255,.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 64, 64); }
 const reflMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(rcv), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 });
 const reflGeo = new THREE.PlaneGeometry(1, 1); reflGeo.rotateX(-Math.PI / 2);
-coreSamples.forEach((p, k) => { if (k % 2) return; const big = p[2] === '靖国通り'; [-1, 1].forEach(s => { if (r2() < .35) return; put('refl', reflGeo, reflMat, M(p[0] + (r2() - .5) * (big ? 14 : 5), 1.22, p[1] + (r2() - .5) * (big ? 14 : 5), 2.5 + r2() * 2, 1, 7 + r2() * 8, r2() * Math.PI), NEON[Math.floor(r2() * NEON.length)], false); }); });
-[LMK.gate, LMK.gate2].forEach((g, i) => g && put('refl', reflGeo, reflMat, M(g.x, 1.23, g.z, 18, 1, 26, g.dir), i ? '#3aa8ff' : '#ff3020', false));
+coreSamples.forEach((p, k) => { if (k % 3) return; const [x, z, , a, w] = p, nx = Math.cos(a), nz = -Math.sin(a); [-1, 1].forEach(s => { if (r2() < .3) return; const o = s * w * .28; put('refl', reflGeo, reflMat, M(x + nx * o, 1.22, z + nz * o, Math.min(w * .22, 3.5), 1, 9, a), NEON[Math.floor(r2() * NEON.length)], false); }); });
+[LMK.gate, LMK.gate2].forEach((g, i) => g && put('refl', reflGeo, reflMat, M(g.x, 1.23, g.z, g.span * .9, 1, 20, g.dir), i ? '#3aa8ff' : '#ff3020', false));
 finalizeKit();
 /* ---------- agents (Dijkstra) ---------- */
 function dijkstra(A, s, t) { const dist = new Map([[s, 0]]), prev = new Map(), done = new Set(); const H = [[0, s]]; const push = e => { H.push(e); let i = H.length - 1; while (i) { const p = (i - 1) >> 1; if (H[p][0] <= H[i][0]) break; [H[p], H[i]] = [H[i], H[p]]; i = p; } }; const pop = () => { const top = H[0], last = H.pop(); if (H.length) { H[0] = last; let i = 0; for (;;) { let l = 2 * i + 1, r = l + 1, m = i; if (l < H.length && H[l][0] < H[m][0]) m = l; if (r < H.length && H[r][0] < H[m][0]) m = r; if (m === i) break; [H[m], H[i]] = [H[i], H[m]]; i = m; } } return top; };
@@ -305,9 +308,9 @@ const KF = [[0, '#0a1030', '#1c2550', '#7d8cff', .35, '#5a6aa8', '#1e1c30', .35,
 let lastSunQ = -1;
 function applyTime(min) { min = ((min % 1440) + 1440) % 1440; let i = 0; while (KF[i + 1][0] <= min) i++; const a = KF[i], b = KF[i + 1], f = (min - a[0]) / (b[0] - a[0]); const lc = k => a[k].clone().lerp(b[k], f), ln = k => a[k] + (b[k] - a[k]) * f;
   skyU.top.value.copy(lc(1)); skyU.hor.value.copy(lc(2)); scene.fog.color.copy(skyU.hor.value); sun.color.copy(lc(3)); sun.intensity = ln(4); hemi.color.copy(lc(5)); hemi.groundColor.copy(lc(6)); hemi.intensity = ln(7);
-  const n = ln(8); U.night.value = n; reflMat.opacity = n * .55; renderer.toneMappingExposure = ln(9); bloom.strength = .1 + n * .55; bloom.threshold = .92 - n * .1;
+  const n = ln(8); U.night.value = n; reflMat.opacity = n * .55; renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
   const qm = Math.floor(min / 15); if (qm !== lastSunQ) { lastSunQ = qm; const m = qm * 15, day = Math.min(1, Math.max(0, (m - 330) / 840)), az = Math.PI * (.2 + .6 * day), el = n > .5 ? .95 : .4 + Math.sin(day * Math.PI) * .65; sun.position.set(Math.cos(az) * Math.cos(el) * 800, Math.sin(el) * 800, Math.sin(az) * Math.cos(el) * 400 + 300); sun.updateMatrixWorld(); } // quantised sun → no shadow crawl
-  signs.forEach(s => s.color.setScalar(.8 + n * .5));
+  signs.forEach(s => s.color.setScalar(.8 + n * .15)); gzLight.intensity = n * 9;
   $('#clock').textContent = String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(Math.floor(min % 60)).padStart(2, '0'); }
 /* ---------- POIs ---------- */
 const pois = D.pois.map(p => ({ ...p }));
@@ -315,9 +318,9 @@ pois.push({ id: null, k: 'gate', nm: ['歌舞伎町一番街 アーチ', 'Kabuki
 const nearNode = (x, z) => { let bi = -1, bd = 1e9; for (const i of wNodes) { const d = (nodes[i][0] - x) ** 2 + (nodes[i][1] - z) ** 2; if (d < bd) { bd = d; bi = i; } } return bi; };
 const labels = [];
 pois.push({ id: null, k: 'gate', nm: ['セントラルロード ゲート', 'Central Road Gate', 'セントラルロード ゲート', '中央路 拱門', 'ttt'], x: LMK.gate2.x, z: LMK.gate2.z, t: {} });
-pois.forEach((p, i) => { let y = 8; const near = bldInfo.reduce((b, q) => { const d = Math.hypot(q.cx - p.x, q.cz - p.z); return d < b[0] ? [d, q] : b; }, [1e9, null]); if (near[1] && near[0] < 18) y = near[1].hv + 6; if (p.k === 'street' || p.k === 'plaza') y = 6; if (p.k === 'tower' && LMK.tower) { p.x = LMK.tower.x; p.z = LMK.tower.z; y = LMK.tower.y; } if (p.k === 'gate') y = 33; if (p.k === 'goldengai') y = 14; if (p.k === 'shrine' && p.id === 'way/102792887' && LMK.torii) y = 14;
+pois.forEach((p, i) => { let y = 8; const near = bldInfo.reduce((b, q) => { const d = Math.hypot(q.cx - p.x, q.cz - p.z); return d < b[0] ? [d, q] : b; }, [1e9, null]); if (near[1] && near[0] < 18) y = near[1].hv + 6; if (p.k === 'street' || p.k === 'plaza') y = 6; if (p.k === 'tower' && LMK.tower) { p.x = LMK.tower.x; p.z = LMK.tower.z; y = LMK.tower.y; } if (p.k === 'gate') { p.hero = Math.hypot(p.x - LMK.gate.x, p.z - LMK.gate.z) < 1 ? LMK.gate : LMK.gate2; y = p.hero.H + 9; } if (p.k === 'goldengai') y = 14; if (p.k === 'shrine' && p.id === 'way/102792887' && LMK.torii) y = 14;
   p.y = y; p.node = nearNode(p.x, p.z); p.no = String(i + 1).padStart(2, '0');
-  const el = document.createElement('div'); el.className = 'lb'; el.innerHTML = `<i>${p.no}</i><span></span>`; el.onclick = e => { e.stopPropagation(); select(i); };
+  const el = document.createElement('div'); el.className = ['gate', 'tower', 'toho'].includes(p.k) ? 'lb hero' : 'lb'; el.innerHTML = `<i>${p.no}</i><span></span>`; el.onclick = e => { e.stopPropagation(); select(i); };
   const o = new CSS2DObject(el); o.position.set(p.x, y, p.z); scene.add(o); labels.push({ el, o, i, mode: '', want: '', cnt: 0, prio: ['tower', 'toho', 'gate', 'goldengai', 'shrine', 'station', 'plaza'].includes(p.k) ? 2 : p.k === 'street' ? 0 : 1 }); });
 function desc(p) { const t = T[lang], L = LI[lang], c = (KCAT[p.k] || KCAT.venue)[L], bits = [];
   if (p.t.height) bits.push(`${t.h} ${p.t.height} m`); if (p.t['building:levels']) bits.push(`${t.lv} ${p.t['building:levels']}`); if (p.t.operator) bits.push(`${t.op} ${p.t.operator}`);
@@ -330,18 +333,33 @@ function flyTo(pos, tgt, dur = 1.2) { fly = { p0: camera.position.clone(), t0: c
 function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes;
   const a = $('#cL'); if (p.id) { a.style.display = ''; a.href = 'https://www.openstreetmap.org/' + p.id; a.textContent = T[lang].osm; } else a.style.display = 'none';
   labels.forEach(l => l.el.classList.toggle('sel', l.i === i)); document.querySelectorAll('.it').forEach(e => e.classList.toggle('sel', +e.dataset.i === i));
-  const tgt = new V3(p.x, Math.min(p.y * .45, 40), p.z), dist = Math.max(150, p.y * 2.2); const dir = camera.position.clone().sub(controls.target).setY(0).normalize(); flyTo(tgt.clone().add(new V3(dir.x * dist * .72, dist * .7, dir.z * dist * .72)), tgt);
+  const v = bestView(poiSpec(p)); flyTo(v[0], v[1], 1.4);
   if (innerWidth < 700) $('#side').classList.remove('open'); }
 function closeCard() { sel = -1; $('#card').classList.remove('on'); labels.forEach(l => l.el.classList.remove('sel')); document.querySelectorAll('.it.sel').forEach(e => e.classList.remove('sel')); }
 const CTR = new V3(-10, 0, -20);
 function panoPos() { const a = camera.aspect, hf = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * a), vf = THREE.MathUtils.degToRad(camera.fov / 2); const R = a < .8 ? 215 : 360; const d = Math.max(R / Math.tan(hf), R * .8 / Math.tan(vf)) * (a < .8 ? .95 : .92); const L = d * 1.08; scene.fog.near = L * 1.3; scene.fog.far = L * 3.5; return CTR.clone().add(new V3(d * .42, d * .78, d * .62)); }
 function pano() { closeCard(); flyTo(panoPos(), CTR.clone()); }
+/* ---------- hero camera: score candidate viewpoints by 2.5D line-of-sight against building footprints ---------- */
+const HG = new Map(), HC = 16; bldInfo.forEach(b => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; b.pts.forEach(([x, z]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }); for (let i = Math.floor(x0 / HC); i <= Math.floor(x1 / HC); i++) for (let j = Math.floor(z0 / HC); j <= Math.floor(z1 / HC); j++) { const k = i * 4096 + j; HG.has(k) ? HG.get(k).push(b) : HG.set(k, [b]); } });
+function heightAt(x, z) { let h = 0; for (const b of HG.get(Math.floor(x / HC) * 4096 + Math.floor(z / HC)) || []) if (b.hv > h && inPoly(x, z, b.pts)) h = b.hv; return h; }
+function poiSpec(p) { const g = p.hero; if (g) { const fx = Math.sin(g.dir), fz = Math.cos(g.dir), nx = Math.cos(g.dir), nz = -Math.sin(g.dir); return { x: g.x, y: g.SY - 1, z: g.z, fit: Math.max(g.span * 1.7, g.H * 1.5), axis: [fx, fz], prefer: [-g.dx, -g.dz], pts: [[0, g.SY, 0], [nx * g.span / 2, g.H, nz * g.span / 2], [-nx * g.span / 2, g.H, -nz * g.span / 2], [nx * g.span / 2, 3, nz * g.span / 2], [-nx * g.span / 2, 3, -nz * g.span / 2]] }; }
+  if (p.k === 'tower' && LMK.tower) return { x: LMK.tower.x, y: LMK.tower.y * .6, z: LMK.tower.z, fit: LMK.tower.y * 1.3, skip: 30 };
+  if (p.k === 'toho' && LMK.godzilla) return { x: LMK.godzilla.x + LMK.godzilla.face[0] * 6, y: LMK.godzilla.y - 8, z: LMK.godzilla.z + LMK.godzilla.face[1] * 6, fit: 60, skip: 12, prefer: LMK.godzilla.face };
+  const fit = p.k === 'goldengai' || p.k === 'plaza' || p.k === 'station' ? 140 : Math.max(55, p.y * 1.6); return { x: p.x, y: Math.max(3, p.y * .45), z: p.z, fit, skip: 14 }; }
+function bestView(sp) { const vf = Math.tan(camera.fov * Math.PI / 360), hf = vf * Math.min(camera.aspect, 1.9), d0 = sp.fit / 2 / Math.min(vf, hf) + 4; const pts = (sp.pts || [[0, 0, 0], [0, sp.fit * .25, 0]]).map(([a, b, c]) => sp.pts ? [sp.x + a, b, sp.z + c] : [sp.x, sp.y + b, sp.z]);
+  const cur = camera.position.clone().sub(controls.target).setY(0).normalize(); let best = null;
+  const dirs = []; if (sp.axis) [1, -1].forEach(s => [0, .18, -.18].forEach(t => { const a = Math.atan2(sp.axis[0] * s, sp.axis[1] * s) + t; dirs.push([Math.sin(a), Math.cos(a), t === 0 ? 1 : .6]); })); for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; dirs.push([Math.sin(a), Math.cos(a), 0]); }
+  for (const [ux, uz, onAxis] of dirs) for (const df of [.7, .85, 1, 1.3, 1.7, 2.3]) for (const el of [.12, .22, .36, .55, .8]) { const d = d0 * df, cx = sp.x + ux * d * Math.cos(el), cz = sp.z + uz * d * Math.cos(el), cy = sp.y + d * Math.sin(el);
+    if (cy < 4) continue; let inside = false; for (const [ox, oz] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]]) if (heightAt(cx + ox, cz + oz) > cy - 2.5) { inside = true; break; } if (inside) continue;
+    let vis = 0; for (const [tx, ty, tz] of pts) { const L = Math.hypot(tx - cx, ty - cy, tz - cz), n = Math.ceil(L / 2); let ok = true; for (let i = 1; i < n; i++) { const t = i / n, x = cx + (tx - cx) * t, y = cy + (ty - cy) * t, z = cz + (tz - cz) * t; if (Math.hypot(x - tx, z - tz) < (sp.skip || 1.5)) break; if (heightAt(x, z) > y) { ok = false; break; } } vis += ok; }
+    const pr = sp.prefer ? (ux * sp.prefer[0] + uz * sp.prefer[1]) : (ux * cur.x + uz * cur.z);
+    const score = vis / pts.length * 10 + onAxis * 3 + pr * (sp.prefer ? 2.5 : .8) - Math.abs(df - 1) * 1.5 - Math.abs(el - (sp.axis ? .22 : .5)) * 2;
+    if (!best || score > best.s) best = { s: score, p: new V3(cx, cy, cz) }; }
+  const tgt = new V3(sp.x, sp.y, sp.z); return [best ? best.p : tgt.clone().add(new V3(cur.x * 150, 120, cur.z * 150)), tgt]; }
 function tourStops() { const P = k => D.pois.find(p => p.k === k), out = [];
-  const gv = g => { const dx = g.dx, dz = g.dz; return [new V3(g.x + dx * 58, 27, g.z + dz * 58), new V3(g.x, 15, g.z)]; };
-  if (LMK.gate) out.push(gv(LMK.gate, '歌舞伎町一番街通り')); if (LMK.tower) out.push([new V3(LMK.tower.x + 150, 140, LMK.tower.z + 230), new V3(LMK.tower.x, 110, LMK.tower.z)]);
-  if (LMK.godzilla) out.push([new V3(LMK.godzilla.x - 70, LMK.godzilla.y + 20, LMK.godzilla.z + 60), new V3(LMK.godzilla.x, LMK.godzilla.y - 10, LMK.godzilla.z)]);
-  [['plaza', 90, 60], ['goldengai', 70, 60], ['station', 110, 80], ['shop', 70, 60], ['batting', 50, 40]].forEach(([k, d, h]) => { const p = P(k); if (p) out.push([new V3(p.x + d * .6, h, p.z + d), new V3(p.x, 5, p.z)]); });
-  if (LMK.torii) out.push([new V3(LMK.torii.x - 50, 35, LMK.torii.z + 50), new V3(LMK.torii.x, 8, LMK.torii.z)]); if (LMK.gate2) out.push(gv(LMK.gate2, 'セントラルロード')); return out; }
+  const Q = k => pois.find(p => p.k === k);
+  ['gate', 'tower', 'toho', 'plaza', 'goldengai', 'station', 'shop', 'batting', 'shrine'].forEach(k => { const p = Q(k); if (p) out.push(bestView(poiSpec(p))); });
+  const g2 = pois.find(p => p.hero === LMK.gate2); if (g2) out.push(bestView(poiSpec(g2))); return out; }
 let tourT = null, tourI = 0;
 function view(i) { const st = tourStops(), v = st[((i % st.length) + st.length) % st.length]; closeCard(); flyTo(v[0], v[1], 1.6); }
 function tour() { if (tourT) { clearInterval(tourT); tourT = null; } else { tourI = 0; view(tourI++); tourT = setInterval(() => view(tourI++), 5000); } applyLang(); }
@@ -412,10 +430,14 @@ function frame() { const dt = Math.min(clock.getDelta(), .1); renderer.info.rese
   if (!FREEZE) { stepAgents(dt); U.time.value += dt; if (++ledF % 4 === 0) drawLED(U.time.value); }
   keyNav(dt);
   if (fly) { fly.k = Math.min(1, fly.k + dt / fly.dur); const e = 1 - Math.pow(1 - fly.k, 3); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e); if (fly.k >= 1) fly = null; }
-  controls.update(); composer.render(); lr.render(scene, camera); layoutLabels();
+  controls.update(); bloom.strength = bloomBase * Math.min(1, Math.max(.35, camera.position.distanceTo(controls.target) / 380)); composer.render(); lr.render(scene, camera); layoutLabels();
   const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z); if (Math.abs(az - lastAz) > .002) { lastAz = az; $('#needle').style.transform = `rotate(${az}rad)`; }
   if (++fc % 6 === 0) drawMini(); }
 $('#load').style.display = 'none'; renderer.setAnimationLoop(frame);
-if (TEST) window.__kb = { ready: true, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; return [LMK.gate, fly.p1, bldInfo.filter(b => Math.hypot(b.cx - fly.p1.x, b.cz - fly.p1.z) < 25).map(b => [b.cx | 0, b.cz | 0, b.hv | 0])]; }, poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
+/* click a gate in 3D → hero view */
+{ const rc = new THREE.Raycaster(), pk = ['gatePost', 'gateBeam', 'gateBox', 'gateArch', 'gateFoot'].map(k => kit[k] && kit[k].im).filter(Boolean); let down = null;
+  canvas.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+  canvas.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; const r = canvas.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera); const h = rc.intersectObjects(pk, false)[0]; if (!h) return; let bi = -1, bd = 1e9; pois.forEach((p, i) => { if (!p.hero) return; const d = Math.hypot(p.hero.x - h.point.x, p.hero.z - h.point.z); if (d < bd) { bd = d; bi = i; } }); if (bi >= 0 && bd < 30) select(bi); }); }
+if (TEST) window.__kb = { ready: true, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
 }
 main().catch(fail);
