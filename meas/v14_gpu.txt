@@ -1,0 +1,3 @@
+map {"geomMB": 5.7, "texMB": 7.8, "geometries": 69, "textures": 21, "calls": 145}
+map+all lods {"geomMB": 6.1, "texMB": 7.8, "geometries": 82, "textures": 21, "calls": 159}
+ichiban dio {"geomMB": 10.1, "texMB": 7.8, "geometries": 149, "textures": 23, "calls": 512}
