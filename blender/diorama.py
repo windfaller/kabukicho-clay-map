@@ -150,7 +150,7 @@ def build_gate(RED, GKEY):
     g = RECTS[GKEY]; u0, v0, u1, v1 = g[:4]; m = .012
     quad('n_gateSign', SIGNF, (0, -.76, SZ), SW - .1, SH - .05, 0, (u0 + m * .3, v0 + m, u1 - m * .3, v1 - m))
     quad('n_gateSignB', SIGNF, (0, .76, SZ), SW - .1, SH - .05, math.pi, (u0 + m * .3, v0 + m, u1 - m * .3, v1 - m))
-    FR = mat('signFrame', '#3a2a22', .5, grain=.2)
+    FR = mat('signFrame', '#efe4d0', .8, grain=.35)  # v22: cream clay rim like the concept
     for fy in (-.78, .78):  # v20: raised frame around both sign faces (depth + edge)
         rbox('n_sfT', FR, (0, fy, SZ + SH / 2 + .02), (SW + .1, .1, .14), bev=.04, seg=2); rbox('n_sfB', FR, (0, fy, SZ - SH / 2 - .02), (SW + .1, .1, .14), bev=.04, seg=2)
         for sx in (-1, 1): rbox('n_sfS', FR, (sx * (SW / 2 + .02), fy, SZ), (.14, .1, SH + .18), bev=.04, seg=2)
@@ -315,7 +315,7 @@ def gate_street():
     for s in (-1, 1):
         for yy in list(range(5, 150, 9)):
             put(lampM, 'i_lamp', (s * 5.25, yy, .3))
-        for xx in (11, 17, 23): put(lampM, 'i_lamp', (s * xx, -5.3, .3))
+        for xx in (17, 23): put(lampM, 'i_lamp', (s * xx, -5.3, .3))  # v22: no lamp right in front of the gate view
     clouds(CLOUDS_STREET); peds([((-4.0, 3, .02), (4.0, 40, .02))] * 10 + [((-6.4, -8, .3), (6.4, -3, .3))] * 4, 0)
 
 # ---------------- v12: more landmarks (same clay kit) ----------------
