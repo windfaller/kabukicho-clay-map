@@ -156,7 +156,7 @@ O.b.forEach(([h, kind, ni, pts], bi) => {
     put('ggLamp', GEO.sph, neonSoft, M(f.mx + f.nx * .9, 2.4, f.mz + f.nz * .9, .6, .8, .6), r() < .6 ? '#ff5a3d' : '#ffd27a', false); return; }
   if (r() < .5 && hv > 8) put('roofbox', GEO.rbox, clay, M(cx + (r() - .5) * 3, hv + .9, cz + (r() - .5) * 3, 2 + r() * 2, 1.8, 2 + r() * 2), '#d8d0c8');
   if (r() < .25 && hv > 12) put('tank', GEO.cyl, clay, M(cx - 2, hv + 1.6, cz + 1.5, 2, 3.2, 2), '#9fb3bf');
-  if (hv < 7 || r() > (core ? .5 : .12)) return;
+  if (hv < 7 || r() > (core ? .5 : .12) || [D.meta.gate, D.meta.gate2].some(g => Math.hypot(g[0] - cx, g[1] - cz) < 45)) return;
   const ei = edgeFacing(pts); if (ei < 0) return; const f = edgeFrame(pts, ei);
   const nc = NEON[Math.floor(r() * NEON.length)], nS = 1;
   for (let s = 0; s < nS; s++) { const t = .15 + .7 * (s + .5) / nS; const px = f.a[0] + (f.b[0] - f.a[0]) * t + f.nx * 1.4, pz = f.a[1] + (f.b[1] - f.a[1]) * t + f.nz * 1.4; const sh2 = Math.min(hv * .7, 7 + r() * 8); const y0 = 4 + r() * Math.max(0, hv - sh2 - 5);
@@ -213,29 +213,21 @@ function glowSign(text, sub, w, h, bg, fg, glow) { const cv = document.createEle
   if (sub) { c.font = `700 ${H * .16}px sans-serif`; c.fillStyle = fg; c.fillText(sub, 512, H * .8); }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); signs.push(mat); return mat; }
 function inward(g, name, k) { const pts = (namedRoads[name] || []).flat().filter(p => Math.hypot(p[0] - g[0], p[1] - g[1]) < 120); let mx = 0, mz = 0; pts.forEach(p => { mx += p[0]; mz += p[1]; }); mx /= pts.length || 1; mz /= pts.length || 1; let dx = mx - g[0], dz = mz - g[1]; const L = Math.hypot(dx, dz) || 1; return [g[0] + dx / L * k, g[1] + dz / L * k, dx / L, dz / L]; }
-function heroGate(p, dir, half, text, sub, frameCol, bg, fg, glow, bulbCol) { // modelled on the real gate: grey posts, lit tube loop with rounded corners, sagging lower band, white sign with coloured text
-  const [gx, gz] = p, nx = Math.cos(dir), nz = -Math.sin(dir), fx = Math.sin(dir), fz = Math.cos(dir), hw = half, H = 12.4, PT = 4.8, T = .75, R = Math.min(2.6, hw * .45), TOP = H - T / 2;
+function heroGate(p, dir, half, text, sub, frameCol, bg, fg, glow, bulbCol) { // follows our Imagine concept (ref/imagine_gate_elevation.png): short grey posts, thick red tube loop, flat top, big rounded corners, sagging lower band, white sign
+  const [gx, gz] = p, nx = Math.cos(dir), nz = -Math.sin(dir), fx = Math.sin(dir), fz = Math.cos(dir), hw = half, span = hw * 2, H = span * .92, T = span * .075, PT = H * .32, R = span * .14, TOP = H - T / 2;
   const at = (u, y, f = 0) => [gx + nx * u + fx * f, y, gz + nz * u + fz * f];
-  const tube = (pts, th, col, kind = 'gateTube', mat = neon, dots = true) => { for (let i = 0; i < pts.length - 1; i++) { const [u0, y0] = pts[i], [u1, y1] = pts[i + 1], L = Math.hypot(u1 - u0, y1 - y0), rz = Math.atan2(y1 - y0, u1 - u0); const [x, y, z] = at((u0 + u1) / 2, (y0 + y1) / 2);
-      put(kind, GEO.box, mat, M(x, y, z, L + .06, th, th, dir, 0, rz), col, false);
-      if (dots) for (let t = .2; t < L; t += .42) [1, -1].forEach(s => { const [bx, by, bz] = at(u0 + (u1 - u0) * t / L, y0 + (y1 - y0) * t / L, th / 2 * s + .04 * s); put('gateBulb', GEO.sph, neon, M(bx, by, bz, .17, .17, .17), bulbCol, false); }); } };
+  const tube = (pts, th, col, step) => { for (let i = 0; i < pts.length - 1; i++) { const [u0, y0] = pts[i], [u1, y1] = pts[i + 1], L = Math.hypot(u1 - u0, y1 - y0), rz = Math.atan2(y1 - y0, u1 - u0); const [x, y, z] = at((u0 + u1) / 2, (y0 + y1) / 2);
+      put('gateTube', GEO.rbox, neon, M(x, y, z, L + th * .5, th, th, dir, 0, rz), col, false);
+      if (step) for (let t = step / 2; t < L; t += step) [1, -1].forEach(s => [-1, 1].forEach(o => { const pu = u0 + (u1 - u0) * t / L - Math.sin(rz) * o * th * .25, py = y0 + (y1 - y0) * t / L + Math.cos(rz) * o * th * .25, [bx, by, bz] = at(pu, py, (th / 2 + .03) * s); put('gateBulb', GEO.sph, neon, M(bx, by, bz, .16, .16, .1), bulbCol, false); })); } };
   const arc = (cu, cy, r, a0, a1, n = 8) => Array.from({ length: n + 1 }, (_, k) => { const a = a0 + (a1 - a0) * k / n; return [cu + Math.cos(a) * r, cy + Math.sin(a) * r]; });
-  // outer loop: up each post, round corners, flat top
-  const outer = [[-hw, PT], [-hw, TOP - R], ...arc(-hw + R, TOP - R, R, Math.PI, Math.PI / 2), ...arc(hw - R, TOP - R, R, Math.PI / 2, 0), [hw, TOP - R], [hw, PT]];
-  tube(outer, T, frameCol);
-  // lower band: sags towards the centre, meets the sides with rounded shoulders
-  const LB = H - 5.2, low = []; for (let k = 0; k <= 16; k++) { const u = (k / 16 * 2 - 1) * (hw - .2); low.push([u, LB + 1.5 * Math.pow(Math.abs(u) / hw, 2.4)]); } tube(low, T * .9, frameCol);
-  // silver inner trim along the loop
-  tube([[-hw + T * .75, PT + .4], [-hw + T * .75, TOP - R], ...arc(-hw + R, TOP - R, R - T * .75, Math.PI, Math.PI / 2, 6), ...arc(hw - R, TOP - R, R - T * .75, Math.PI / 2, 0, 6), [hw - T * .75, TOP - R], [hw - T * .75, PT + .4]], .14, '#c9ccd4', 'gateTrim', clay, false);
-  // grey steel posts + base
-  [-1, 1].forEach(s => { const [x, , z] = at(hw * s, 0); put('gatePost', GEO.box, clay, M(x, PT / 2, z, .95, PT, .95, dir), '#8e9298'); put('gatePost', GEO.box, clay, M(x, PT - .15, z, 1.15, .3, 1.15, dir), '#b9bcc2'); put('gateFoot', GEO.rbox, clay, M(x, .3, z, 1.4, .6, 1.4, dir), '#5d6066');
-    const [lx, , lz] = at(hw * s - s * .9, 0); put('gatePost', GEO.box, clay, M(lx, 2.4, lz, .5, 1.4, .15, dir), '#f4f1ea'); });
-  // sign: white board with coloured text, between the bands
-  const SW = Math.min(hw * 2 - 2 * R + 1.2, hw * 1.45), SH = Math.max(1.8, Math.min(2.8, SW * .25)), SY = (LB + .5 + TOP - T / 2) / 2 + .1;
-  { const [x, y, z] = at(0, SY); put('gateBox', GEO.box, clay, M(x, y, z, SW + .3, SH + .3, .45, dir), '#3a3c42'); }
-  const mat = glowSign(text, sub, SW, SH, bg, fg, glow); [1, -1].forEach(s => { const pl = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), mat); pl.position.set(...at(0, SY, .24 * s)); pl.rotation.y = dir + (s > 0 ? 0 : Math.PI); scene.add(pl); });
-  [-1, 1].forEach(s => { const [x, y, z] = at(s * SW * .35, (SY + SH / 2 + TOP - T / 2) / 2); const hh = TOP - T / 2 - (SY + SH / 2); if (hh > .05) put('gateTrim', GEO.box, clay, M(x, y, z, .12, hh + .1, .12, dir), '#9a9da4'); });
-  return { x: gx, z: gz, dir, dx: p[2], dz: p[3], span: half * 2, H, SY, SW, SH }; }
+  tube([[-hw, PT - .2], [-hw, TOP - R], ...arc(-hw + R, TOP - R, R, Math.PI, Math.PI / 2), ...arc(hw - R, TOP - R, R, Math.PI / 2, 0), [hw, TOP - R], [hw, PT - .2]], T, frameCol, .55);
+  const LB = H * .56, low = [], ri = R * .7; low.push(...arc(-hw + ri, LB - ri, ri, Math.PI, Math.PI / 2, 5).slice(1)); for (let k = 1; k < 10; k++) { const u = -hw + ri + (span - 2 * ri) * k / 10; low.push([u, LB - .35 * Math.sin(Math.PI * k / 10)]); } low.push(...arc(hw - ri, LB - ri, ri, Math.PI / 2, 0, 5).slice(0, -1)); tube(low, T * .85, frameCol, .55);
+  [-1, 1].forEach(s => { const [x, , z] = at(hw * s, 0), pr = T * .85; put('gatePost', GEO.cyl, neonSoft, M(x, PT / 2, z, pr * 2, PT, pr * 2), '#9a9ea6'); put('gatePost', GEO.cyl, neonSoft, M(x, PT - .2, z, pr * 2.3, .45, pr * 2.3), '#b8bcc3'); put('gateFoot', GEO.cyl, neonSoft, M(x, .25, z, pr * 2.4, .5, pr * 2.4), '#8a8e96'); });
+  const SW = span * .72, SH = H * .26, SY = (LB + T * .5 + TOP - T * .5) / 2 + .1;
+  { const [x, y, z] = at(0, SY); put('gateBox', GEO.rbox, clay, M(x, y, z, SW + .2, SH + .2, .5, dir), '#e9e2d4'); }
+  [-1, 1].forEach(s => { const [x, y, z] = at(s * (SW / 2 + (hw - SW / 2) / 2), SY); put('gateTrim', GEO.cyl, clay, M(x, y, z, .35, hw - SW / 2 + .2, .35, dir, 0, Math.PI / 2), '#a9adb4'); });
+  const mat = glowSign(text, sub, SW, SH, bg, fg, glow); [1, -1].forEach(s => { const pl = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), mat); pl.position.set(...at(0, SY, .27 * s)); pl.rotation.y = dir + (s > 0 ? 0 : Math.PI); scene.add(pl); });
+  return { x: gx, z: gz, dir, dx: p[2], dz: p[3], span, H, SY, SW, SH }; }
 function roadW(name, p) { let w = 10, bd = 1e9; (namedRoads[name] || []).forEach(q => q.forEach(v => { const d = Math.hypot(v[0] - p[0], v[1] - p[1]); if (d < bd) { bd = d; w = q.w; } })); return w; }
 const gA = inward(gate, '歌舞伎町一番街通り', 10), gB = inward(gate2, 'セントラルロード', 10);
 LMK.gate = heroGate(gA, roadDir('歌舞伎町一番街通り', gA), roadW('歌舞伎町一番街通り', gA) / 2 + .8, '歌舞伎町一番街', 'KABUKICHO ICHIBANGAI', '#ff1e2a', '#fbf7ef', '#d0101c', '#ff9a9a', '#fff4f4');
@@ -264,10 +256,10 @@ const CORE_ST = ['歌舞伎町一番街通り', 'セントラルロード', '歌
 const coreSamples = []; CORE_ST.forEach(n => (namedRoads[n] || []).forEach(pts => { for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az); const ang = Math.atan2(bx - ax, bz - az); for (let s = 0; s < L; s += 3) coreSamples.push([ax + (bx - ax) * s / L, az + (bz - az) * s / L, n, ang, pts.w || 8]); } }));
 const nearCore = (x, z, r) => coreSamples.some(p => Math.abs(p[0] - x) < r && Math.abs(p[1] - z) < r && Math.hypot(p[0] - x, p[1] - z) < r);
 const r2 = mulberry32(77), ledTargets = [];
-const nearGate = (x, z) => [LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - x, g.z - z) < 30);
+const nearGate = (x, z) => [LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - x, g.z - z) < 48);
 bldInfo.forEach(info => { if (info.kind >= 3 || info.kind === 7 || info.hv < 8 || !nearCore(info.cx, info.cz, 24)) return; const ng = nearGate(info.cx, info.cz); const ei = edgeFacing(info.pts); if (ei < 0) return; const f = edgeFrame(info.pts, ei);
   const cols = info.hv > 14 && r2() < .6 ? 1 : 0;
-  for (let c = 0; c < cols; c++) { const t = (c + .5) / cols, px = f.a[0] + (f.b[0] - f.a[0]) * t + f.nx * 1.6, pz = f.a[1] + (f.b[1] - f.a[1]) * t + f.nz * 1.6; if ([LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - px, g.z - pz) < 22)) continue; let y = 4.6; const top = Math.min(info.hv - 1, 34);
+  for (let c = 0; c < cols; c++) { const t = (c + .5) / cols, px = f.a[0] + (f.b[0] - f.a[0]) * t + f.nx * 1.6, pz = f.a[1] + (f.b[1] - f.a[1]) * t + f.nz * 1.6; if ([LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - px, g.z - pz) < 48)) continue; let y = 4.6; const top = Math.min(info.hv - 1, 34);
     while (y < top - 2) { const h = 3.5 + r2() * 3; if (y + h > top) break; put('stack', GEO.box, neon, M(px, y + h / 2, pz, 1, h, 3.4, f.ang + Math.PI / 2), NEON[Math.floor(r2() * NEON.length)]); put('stackF', GEO.box, clay, M(px - f.nx * .2, y + h / 2, pz - f.nz * .2, .6, h + .3, 3.8, f.ang + Math.PI / 2), '#3a3238'); y += h + .5; } }
   if (!ng && info.hv > 12 && r2() < .55) { const w = Math.min(f.L * .7, 16), bx = info.cx + f.nx * 2, bz = info.cz + f.nz * 2; [-1, 1].forEach(s => put('pole', GEO.cyl, clay, M(bx + Math.cos(f.ang) * w * .4 * s, info.hv + 2, bz - Math.sin(f.ang) * w * .4 * s, .35, 4, .35), '#4a4448'));
     put('roofbill', GEO.box, neon, M(bx, info.hv + 6, bz, w, 4.5, .6, f.ang + Math.PI), NEON[Math.floor(r2() * NEON.length)]); put('roofbillF', GEO.box, clay, M(bx - f.nx * .35, info.hv + 6, bz - f.nz * .35, w + .6, 5.1, .4, f.ang + Math.PI), '#1e1a22'); }
@@ -312,7 +304,7 @@ function stepAgents(dt) { walkT += dt;
   const upd = (a, side) => { let P0 = nodes[a.path[a.seg]], P1 = nodes[a.path[a.seg + 1]]; let L = Math.hypot(P1[0] - P0[0], P1[1] - P0[1]) || .01; a.t += a.speed * dt / L;
     while (a.t >= 1) { a.t -= 1; a.seg++; if (a.seg >= a.path.length - 1) newPath(a, a.path[a.path.length - 1]); P0 = nodes[a.path[a.seg]]; P1 = nodes[a.path[a.seg + 1]]; L = Math.hypot(P1[0] - P0[0], P1[1] - P0[1]) || .01; }
     const dx = (P1[0] - P0[0]) / L, dz = (P1[1] - P0[1]) / L; return [P0[0] + (P1[0] - P0[0]) * a.t - dz * side, P0[1] + (P1[1] - P0[1]) * a.t + dx * side, Math.atan2(dx, dz)]; };
-  walkers.forEach((a, i) => { const [x, z, ang] = upd(a, a.off * 3); const bob = Math.abs(Math.sin(walkT * 6 + i)) * .2; const hs = Math.hypot(x - camera.position.x, z - camera.position.z) < Math.min(70, camera.position.distanceTo(controls.target) * .85) ? 0 : 1; wBody.setMatrixAt(i, M(x, 2 + bob, z, hs, hs, hs, ang)); wHead.setMatrixAt(i, M(x, 4.3 + bob, z, 1.5 * hs, 1.5 * hs, 1.5 * hs)); });
+  walkers.forEach((a, i) => { const [x, z, ang] = upd(a, a.off * 3); const bob = Math.abs(Math.sin(walkT * 6 + i)) * .2; const cd = camera.position.distanceTo(controls.target), hs = Math.hypot(x - camera.position.x, z - camera.position.z) < Math.min(70, cd * .85) || cd < 120 && [LMK.gate, LMK.gate2].some(g => Math.hypot(x - g.x, z - g.z) < 10) ? 0 : 1; wBody.setMatrixAt(i, M(x, 2 + bob, z, hs, hs, hs, ang)); wHead.setMatrixAt(i, M(x, 4.3 + bob, z, 1.5 * hs, 1.5 * hs, 1.5 * hs)); });
   cars.forEach((a, i) => { const [x, z, ang] = upd(a, 2.4), s = Math.sin(ang), c = Math.cos(ang); carM.setMatrixAt(i, M(x, 1.9, z, 2.4, 1.6, 4.8, ang)); carTop.setMatrixAt(i, M(x - s * .3, 3, z - c * .3, 2.1, 1, 2.6, ang)); carLights.setMatrixAt(i * 2, M(x + s * 2.45, 2, z + c * 2.45, 2, .4, .1, ang)); carLights.setMatrixAt(i * 2 + 1, M(x - s * 2.45, 2, z - c * 2.45, 2, .4, .1, ang)); });
   [wBody, wHead, carM, carTop, carLights].forEach(m => m.instanceMatrix.needsUpdate = true); }
 stepAgents(0);
@@ -343,7 +335,7 @@ function desc(p) { const t = T[lang], L = LI[lang], c = (KCAT[p.k] || KCAT.venue
 /* ---------- selection / camera ---------- */
 let sel = -1, fly = null; const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function flyTo(pos, tgt, dur = 1.2) { fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: tgt, k: RM ? .999 : 0, dur }; }
-function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes;
+function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = !(p.hero === LMK.gate); }
   const a = $('#cL'); if (p.id) { a.style.display = ''; a.href = 'https://www.openstreetmap.org/' + p.id; a.textContent = T[lang].osm; } else a.style.display = 'none';
   labels.forEach(l => l.el.classList.toggle('sel', l.i === i)); document.querySelectorAll('.it').forEach(e => e.classList.toggle('sel', +e.dataset.i === i));
   const v = bestView(poiSpec(p)); flyTo(v[0], v[1], 1.4);
