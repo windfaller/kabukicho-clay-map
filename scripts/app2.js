@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-const AV = '?v=23'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
+const AV = '?v=24'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -68,6 +68,13 @@ scene.add(new THREE.Mesh(new THREE.SphereGeometry(3500, 24, 12), new THREE.Shade
 const U = { night: { value: 0 }, time: { value: 0 } };
 function neonMat(day = .15, nightK = 1.8) { const m = new THREE.MeshStandardMaterial({ roughness: .5 }); m.onBeforeCompile = s => { s.uniforms.uNight = U.night; s.fragmentShader = 'uniform float uNight;\n' + s.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance += vColor * (${day.toFixed(2)} + uNight * ${nightK.toFixed(2)});\n#endif`); }; m.customProgramCacheKey = () => 'neon' + day + nightK; return m; }
 const clay = new THREE.MeshStandardMaterial({ roughness: .85 });
+/* v24: hand-made clay feel – fine world-space grain + soft thumb-press bump on map & LOD buildings */
+function addClay(m, amp = 1) { const prev = m.onBeforeCompile, key = m.customProgramCacheKey ? m.customProgramCacheKey() : ''; m.onBeforeCompile = (sh, r) => { if (prev) prev(sh, r);
+  sh.vertexShader = 'varying vec3 vCP;\n' + sh.vertexShader.replace('#include <fog_vertex>', '#include <fog_vertex>\n vCP = (modelMatrix * vec4(transformed, 1.)).xyz;');
+  sh.fragmentShader = 'varying vec3 vCP;\nfloat cvn(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float n=dot(i,vec3(1.,57.,113.));vec4 a=fract(sin(vec4(n,n+1.,n+57.,n+58.))*43758.5453),b=fract(sin(vec4(n+113.,n+114.,n+170.,n+171.))*43758.5453);a=mix(a,b,f.z);vec2 c=mix(a.xy,a.zw,f.y);return mix(c.x,c.y,f.x);}\n' + sh.fragmentShader
+    .replace('#include <color_fragment>', '#include <color_fragment>\n float cg = cvn(vCP * 1.7) * .6 + cvn(vCP * 5.3) * .4; diffuseColor.rgb *= .93 + .12 * cg * ' + amp.toFixed(2) + ';')
+    .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n { float h = cvn(vCP * .9) * .7 + cvn(vCP * 3.1) * .3; vec3 dpx = dFdx(vCP), dpy = dFdy(vCP); float dhx = dFdx(h), dhy = dFdy(h); vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1); vec3 g = sign(det) * (dhx * r1 + dhy * r2); normal = normalize(abs(det) * normal - g * ' + (.35 * amp).toFixed(3) + '); }'); };
+  m.customProgramCacheKey = () => key + 'clay'; m.needsUpdate = true; }
 const bldMat = new THREE.MeshStandardMaterial({ roughness: .82, vertexColors: true });
 bldMat.onBeforeCompile = s => {
   s.uniforms.uNight = U.night;
@@ -87,7 +94,7 @@ bldMat.onBeforeCompile = s => {
     totalEmissiveRadiance += uNight * (win * lit * (1. - ground) * wc * .8 + ground * vec3(1., .55, .3) * .6);
   }`);
 };
-bldMat.customProgramCacheKey = () => 'bld';
+bldMat.customProgramCacheKey = () => 'bld'; addClay(bldMat);
 const neon = neonMat(), neonSoft = neonMat(.1, 1.6);
 /* ---------- instanced kit ---------- */
 const kit = {};
@@ -373,7 +380,7 @@ const KF = [[0, '#0a1030', '#1c2550', '#7d8cff', .35, '#5a6aa8', '#1e1c30', .35,
 let lastSunQ = -1;
 function applyTime(min) { min = ((min % 1440) + 1440) % 1440; let i = 0; while (KF[i + 1][0] <= min) i++; const a = KF[i], b = KF[i + 1], f = (min - a[0]) / (b[0] - a[0]); const lc = k => a[k].clone().lerp(b[k], f), ln = k => a[k] + (b[k] - a[k]) * f;
   skyU.top.value.copy(lc(1)); skyU.hor.value.copy(lc(2)); scene.fog.color.copy(skyU.hor.value); sun.color.copy(lc(3)); sun.intensity = ln(4); hemi.color.copy(lc(5)); hemi.groundColor.copy(lc(6)); hemi.intensity = ln(7);
-  const n = ln(8); lastN = n; glbEm.forEach(m => m.emissiveIntensity = (m.userData.em[0] + n * m.userData.em[1]) * (1 + ((m.userData.emx || 1) - 1) * n)); U.night.value = n; reflMat.opacity = n * .32; if (gateL) gateL.intensity = n * 200; gateLF.intensity = n * 100; poolMat.opacity = n * .8; /* v19: subtle sheen, no smears */ renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
+  const n = ln(8); lastN = n; glbEm.forEach(m => m.emissiveIntensity = (m.userData.em[0] + n * m.userData.em[1]) * (1 + ((m.userData.emx || 1) - 1) * n)); U.night.value = n; reflMat.opacity = n * n * .34; if (gateL) gateL.intensity = n * 200; gateLF.intensity = n * 100; poolMat.opacity = n * .8; /* v19: subtle sheen, no smears */ renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
   const qm = Math.floor(min / 15); if (qm !== lastSunQ) { lastSunQ = qm; const m = qm * 15, day = Math.min(1, Math.max(0, (m - 330) / 840)), az = Math.PI * (.2 + .6 * day), el = n > .5 ? .95 : .4 + Math.sin(day * Math.PI) * .65; sun.position.set(Math.cos(az) * Math.cos(el) * 800, Math.sin(el) * 800, Math.sin(az) * Math.cos(el) * 400 + 300); sunBase.copy(sun.position); shQ = ''; sun.updateMatrixWorld(); } // quantised sun → no shadow crawl
   signs.forEach(s => s.color.setScalar(.8 + n * .15)); gzLight.intensity = n * 9;
   $('#clock').textContent = String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(Math.floor(min % 60)).padStart(2, '0'); }
@@ -460,7 +467,7 @@ Object.assign(LODPOS, { goldengai: ggC, hanazono: () => LMK.torii && { x: LMK.to
   plaza: () => { const p = D.pois.find(q => q.k === 'plaza'), t = LMK.tower; return p && t && { x: p.x, z: p.z, ry: Math.atan2(t.x - p.x, t.z - p.z) + Math.PI, s: 1 }; } });
 const LODHIDE = { goldengai: 'gg', hanazono: 'hz' }, LODNEAR = { hanazono: 380, plaza: 380 }; // Golden Gai on the map = real OSM shacks (true scale); its Blender model is diorama-only // these stream in when the camera comes close
 /* map LODs: drop pedestrians (sub-pixel at map scale) and bake every plain-coloured mesh into one vertex-coloured mesh → ~1 draw call per landmark (+ emissive parts) */
-const lodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85 });
+const lodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85 }); addClay(lodMat);
 function bakeLod(o) { o.updateMatrixWorld(true); const inv = o.matrixWorld.clone().invert(), gs = [], kill = [];
   o.children.filter(c => /^PEDS/.test(c.name)).forEach(c => o.remove(c));
   o.traverse(m => { if (!m.isMesh || m.isInstancedMesh) return; const mt = m.material; if (EMK2[mt.name] || mt.map || mt.transparent) return;
