@@ -170,7 +170,18 @@ def framed(bm, w, h, d, inset, depth, bev):
     for f in bm.faces: f.smooth = True
 winM = mesh_of(lambda bm: framed(bm, .72, .98, .3, .11, .12, .04), 'winM', [FRAME, GLASS])
 winS = mesh_of(lambda bm: framed(bm, .62, .82, .28, .1, .1, .035), 'winS', [FRAME, GLASS])
-shopM = mesh_of(lambda bm: framed(bm, 3.0, 2.3, .35, .22, .18, .06), 'shopM', [FRAME, SHOPG])
+def shopfront(bm):  # v29: concept shopfront – wood door + two mullioned display windows + sill, instead of one flat glowing slab
+    rbox_bm(bm, Vector((0, 0, 0)), (3.0, .35, 2.3), .05, 2, 0)
+    rbox_bm(bm, Vector((-.98, -.2, -.12)), (.78, .08, 1.96), .03, 1, 2)
+    rbox_bm(bm, Vector((-.98, -.25, .45)), (.44, .04, .5), .02, 1, 1)
+    for x in (.05, .98):
+        rbox_bm(bm, Vector((x, -.2, .18)), (.84, .06, 1.38), .02, 1, 1)
+        rbox_bm(bm, Vector((x, -.24, .18)), (.06, .05, 1.38), 0, 1, 0)
+        rbox_bm(bm, Vector((x, -.24, .42)), (.84, .05, .05), 0, 1, 0)
+    rbox_bm(bm, Vector((.52, -.3, -.56)), (1.95, .2, .1), .03, 1, 3)
+    rbox_bm(bm, Vector((0, -.22, 1.02)), (2.9, .1, .22), .03, 1, 3)
+    for f in bm.faces: f.smooth = True
+shopM = mesh_of(shopfront, 'shopM', [FRAME, SHOPG, DOOR, CURB])
 def lamp(bm):
     cyl_bm(bm, Vector((0, 0, .25)), .26, .5, 12, 0, .06)
     cyl_bm(bm, Vector((0, 0, 2.1)), .09, 3.4, 10, 0)
@@ -256,7 +267,8 @@ def peds(boxes, seed=0, s=1.0):
     rr = random.Random(seed + 77)
     for k, (lo, hi) in enumerate(boxes):
         ci = k % len(CLOTH); girl = k % 3 == 1
-        me = mesh_of(lambda bm: person(bm, ci, girl), 'pedM%d' % k, [CLOTH[ci], SKIN, HAIR, mat('legs', '#3a3540', .8)])
+        g0 = GDET[0]; GDET[0] = True  # v29: clay people keep smooth heads/bodies in the map LOD
+        me = mesh_of(lambda bm: person(bm, ci, girl), 'pedM%d' % k, [CLOTH[ci], SKIN, HAIR, mat('legs', '#3a3540', .8)]); GDET[0] = g0
         x = rr.uniform(lo[0], hi[0]); yy = rr.uniform(lo[1], hi[1])
         if lo[0] < -4.5 and hi[0] > 4.5 and lo[0] < -6: x = rr.choice((-1, 1)) * rr.uniform(5.2, 6.4)
         o = put(me, 'p_ped%d' % k, (x, yy, lo[2]), math.pi if k % 4 == 0 else 0, s); PEDS.append(o)
