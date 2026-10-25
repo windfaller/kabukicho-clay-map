@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-const AV = '?v=15'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
+const AV = '?v=16'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -152,7 +152,7 @@ O.b.forEach(([h, kind, ni, pts], bi) => {
   const r = mulberry32(bi * 7919 + 13); let hv = Math.max(3, hComp(h));
   let cx = 0, cz = 0; pts.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= pts.length; cz /= pts.length;
   if (hotel && inPoly(hotel.x, hotel.z, pts)) kind = 8; if (pepe && inPoly(pepe.x, pepe.z, pts)) kind = 9;
-  if (kind < 2 && inDio(cx, cz)) return;
+  // v16: OSM blocks stay continuous through the gates (the gate LOD carries no buildings or ground of its own)
   const info = { cx, cz, hv, pts, kind }; bldInfo.push(info); if (kind >= 3) (LMK[kind] ||= []).push(info);
   if (kind === 3) return; // Tokyu Kabukicho Tower: Blender LOD (assets/map_lods.glb)
   const core = cx > -240 && cx < 230 && cz > -220 && cz < 110;
@@ -450,8 +450,11 @@ function bakeLod(o) { o.updateMatrixWorld(true); const inv = o.matrixWorld.clone
     g.setAttribute('color', new THREE.BufferAttribute(c, 3)); gs.push(g); kill.push(m); });
   if (!gs.length) return; kill.forEach(m => m.parent.remove(m)); const me = new THREE.Mesh(mergeGeometries(gs), lodMat); me.castShadow = me.receiveShadow = true; me.name = 'baked'; o.add(me); }
 const lodState = {}; let lodPending = 0;
-function lodLoad(k) { if (lodState[k]) return; lodState[k] = 1; lodPending++; loadGLB('assets/lod_' + k + '.glb' + AV).then(gl => { const o = gl.scene.getObjectByName('L_' + k) || gl.scene, F = LODPOS[k](); dioMats(o, false); o.traverse(m => { if (m.material && /^roofTile/.test(m.material.name)) m.material.color.set('#8d838c'); }); bakeLod(o); if (F) { o.position.set(F.x, F.y || 0, F.z); o.rotation.set(0, F.ry, 0); o.scale.set(F.sx || F.s, F.s, F.s); scene.add(o); LMK['lod_' + k] = o; if (LODHIDE[k] && PH[LODHIDE[k]]) PH[LODHIDE[k]].visible = false;
+function lodLoad(k) { if (lodState[k]) return; lodState[k] = 1; lodPending++; loadGLB('assets/lod_' + k + '.glb' + AV).then(gl => { const o = gl.scene.getObjectByName('L_' + k) || gl.scene, F = LODPOS[k](); lodStrip(k, o); dioMats(o, false); o.traverse(m => { if (m.material && /^roofTile/.test(m.material.name)) m.material.color.set('#8d838c'); }); bakeLod(o); if (F) { o.position.set(F.x, F.y || 0, F.z); o.rotation.set(0, F.ry, 0); o.scale.set(F.sx || F.s, F.s, F.s); scene.add(o); LMK['lod_' + k] = o; if (LODHIDE[k] && PH[LODHIDE[k]]) PH[LODHIDE[k]].visible = false;
       const pg = o.children.find(c => /^PEDS/.test(c.name)); if (pg) pg.children.forEach((p, j) => DIO.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (j % 5) * .12, ph: j * 1.7, walk: [-42, 52] })); } }).catch(e => console.error('lod ' + k, e)).finally(() => { lodPending--; }); }
+/* v16: the map keeps only the landmark itself; diorama ground, plinths, pavements, kerbs and stand-in buildings are dropped so it sits on the real OSM street */
+const LODDROP = { ichiban: /^near_(bld|ledge|awn|curb)/, central: /^near_(bld|ledge|awn|curb)/, plaza: /^near_pave/ }, LODDROPMAT = /^(curb|frame|shopGlass|window|pave|walk|road|base|plinth|ground)/;
+function lodStrip(k, o) { const re = LODDROP[k], dead = []; o.traverse(m => { if (!m.isMesh) return; const mats = [].concat(m.material || []); if ((re && re.test(m.name)) || mats.some(x => LODDROPMAT.test(x.name || ''))) dead.push(m); }); dead.forEach(m => m.parent && m.parent.remove(m)); LMK['lodDrop_' + k] = dead.length; }
 let lodDone = false, lodT = 0; const _lv = new V3();
 function lodNear() { if (!lodDone || (lodT++ & 15)) return; Object.entries(LODNEAR).forEach(([k, R]) => { if (lodState[k]) return; const F = LODPOS[k](); if (!F) return; const c = DIO.on ? null : camera.position; if (c && Math.hypot(c.x - F.x, c.y, c.z - F.z) < R) lodLoad(k); }); }
 function loadLods() { ['ichiban', 'central', 'tokyu', 'toho'].forEach(lodLoad); lodDone = true; const w = () => lodPending ? setTimeout(w, 50) : (glbDone = true); w(); }
