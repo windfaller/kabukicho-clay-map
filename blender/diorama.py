@@ -80,7 +80,7 @@ def quad(name, m, center, w, h, rz, uv):
 # ---------------- palette ----------------
 RED = mat('gateRed', '#e3262c', .5, em='#ff2020', ems=.12)
 BULB = mat('bulb', '#fff6ea', .15, em='#fff0d8', ems=2.6, grain=0)
-STONE = mat('post', '#a9a6a2', .95, grain=.5)
+STONE = mat('post', '#c2c0bb', .95, grain=.5)
 SIGNB = mat('signBody', '#efe7d6', .8)
 SIGNF = mat('signFace', '#ffffff', .75, em='#ffffff', ems=.35, tex='atlas.png', grain=.05)
 SBACK = mat('signBack', '#2b2433', .9)
