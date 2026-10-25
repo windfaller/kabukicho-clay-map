@@ -42,7 +42,7 @@ def rbox_bm(bm, c, size, bev, seg, mi=0, rz=0):
     for v in bm.verts: v.tag = True
     r = bmesh.ops.create_cube(bm, size=1.0)['verts']
     for v in r: v.co = Vector((v.co.x * size[0], v.co.y * size[1], v.co.z * size[2])); v.tag = False
-    if LOD: seg = 1; bev = bev if max(size) > 6 else 0  # small parts: plain boxes at map scale
+    if LOD and not GDET[0]: seg = 1; bev = bev if max(size) > 6 else 0  # small parts: plain boxes at map scale
     if bev > 0:
         es = list({e for v in r for e in v.link_edges})
         bmesh.ops.bevel(bm, geom=es, offset=min(bev, min(size) * .48), segments=seg, affect='EDGES', profile=.5)
@@ -57,7 +57,7 @@ def mesh_of(fn, name, mats):
 def rbox(name, m, c, size, bev=.3, seg=3, rz=0):
     me = mesh_of(lambda bm: rbox_bm(bm, Vector((0, 0, 0)), size, bev, seg), name, [m]); return put(me, name, c, rz)
 def cyl_bm(bm, c, r, h, verts=24, mi=0, bev=0, r2=None):
-    if LOD: verts = max(6, verts // 3); bev = 0
+    if LOD and not GDET[0]: verts = max(6, verts // 3); bev = 0
     g = bmesh.ops.create_cone(bm, cap_ends=True, segments=verts, radius1=r, radius2=r2 if r2 is not None else r, depth=h, matrix=Matrix.Translation(c))
     vs = g['verts']
     if bev:
@@ -66,7 +66,7 @@ def cyl_bm(bm, c, r, h, verts=24, mi=0, bev=0, r2=None):
     for f in {f for v in bm.verts for f in v.link_faces if not v.tag}: f.material_index = mi; f.smooth = True
     for v in bm.verts: v.tag = True
 def sph_bm(bm, c, r, mi=0, sub=2, scl=(1, 1, 1)):
-    if LOD: sub = 1
+    if LOD and not GDET[0]: sub = 1
     bmesh.ops.create_icosphere(bm, subdivisions=sub, radius=1, matrix=Matrix.Translation(c) @ Matrix.Diagonal((*[r * s for s in scl], 1)))
     for f in {f for v in bm.verts for f in v.link_faces if not v.tag}: f.material_index = mi; f.smooth = True
     for v in bm.verts: v.tag = True
@@ -102,14 +102,16 @@ AWN = [mat('awn%d' % i, c, .85) for i, c in enumerate(['#c7362e', '#d9a33a', '#3
 SKIN = mat('skin', '#e8b896', .7); HAIR = mat('hair', '#3a2a24', .8)
 CLOTH = [mat('cloth%d' % i, c, .85) for i, c in enumerate(['#d8b04a', '#3f8a5a', '#c4405a', '#3d5e9e', '#8a5aa0', '#d07a3a', '#5a5f6a'])]
 
+GDET = [False]
 def build_gate(RED, GKEY):
+    GDET[0] = True  # v20: gate keeps full-res geometry in the map LOD
     # ---------------- gate ----------------
     S = 5.8; TR = .68; TOP = 11.0; R = 2.0; LB = 6.85; RI = 1.05
     def arc(cx, cz, r, a0, a1, n=12): return [(cx + math.cos(a0 + (a1 - a0) * k / n) * r, cz + math.sin(a0 + (a1 - a0) * k / n) * r) for k in range(n + 1)]
     loop = [(-S, 3.7), (-S, TOP - R)] + arc(-S + R, TOP - R, R, math.pi, math.pi / 2)[1:] + [(-S + R + (2 * S - 2 * R) * k / 8, TOP + .12 * math.sin(math.pi * k / 8)) for k in range(1, 8)] + arc(S - R, TOP - R, R, math.pi / 2, 0) + [(S, 3.7)]
     low = arc(-S + RI, LB + RI, RI, math.pi, 1.5 * math.pi, 7) + [(-S + RI + (2 * S - 2 * RI) * k / 12, LB - .22 * math.sin(math.pi * k / 12)) for k in range(1, 12)] + arc(S - RI, LB + RI, RI, 1.5 * math.pi, 2 * math.pi, 7)
     def tube(pts, name, TR=TR, RED=RED):
-        cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = TR; cu.bevel_resolution = 1 if LOD else 6; cu.use_fill_caps = True
+        cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = TR; cu.bevel_resolution = 4 if LOD else 6; cu.use_fill_caps = True
         sp = cu.splines.new('BEZIER'); sp.bezier_points.add(len(pts) - 1)
         for p, (x, z) in zip(sp.bezier_points, pts): p.co = (x, 0, z); p.handle_left_type = p.handle_right_type = 'AUTO'
         cu.resolution_u = 4; o = bpy.data.objects.new(name, cu); COL.objects.link(o); cu.materials.append(RED)
@@ -148,6 +150,14 @@ def build_gate(RED, GKEY):
     g = RECTS[GKEY]; u0, v0, u1, v1 = g[:4]; m = .012
     quad('n_gateSign', SIGNF, (0, -.76, SZ), SW - .1, SH - .05, 0, (u0 + m * .3, v0 + m, u1 - m * .3, v1 - m))
     quad('n_gateSignB', SIGNF, (0, .76, SZ), SW - .1, SH - .05, math.pi, (u0 + m * .3, v0 + m, u1 - m * .3, v1 - m))
+    FR = mat('signFrame', '#3a2a22', .5, grain=.2)
+    for fy in (-.78, .78):  # v20: raised frame around both sign faces (depth + edge)
+        rbox('n_sfT', FR, (0, fy, SZ + SH / 2 + .02), (SW + .1, .1, .14), bev=.04, seg=2); rbox('n_sfB', FR, (0, fy, SZ - SH / 2 - .02), (SW + .1, .1, .14), bev=.04, seg=2)
+        for sx in (-1, 1): rbox('n_sfS', FR, (sx * (SW / 2 + .02), fy, SZ), (.14, .1, SH + .18), bev=.04, seg=2)
+    for s_ in (-1, 1):  # v20: pillar plinth + ring mouldings
+        rbox('n_plinth', STONE, (s_ * S, 0, .09), (2.9, 2.9, .18), bev=.06, seg=2)
+        for zz in (1.15, 3.05): me = mesh_of(lambda bm, zz=zz: cyl_bm(bm, Vector((0, 0, zz)), .98, .08, 32, 0, .03), 'ring', [CURB]); put(me, 'n_pring', (s_ * S, 0, 0))
+    GDET[0] = False
 # ---------------- windows / shopfront / lamp meshes ----------------
 def framed(bm, w, h, d, inset, depth, bev):
     r = bmesh.ops.create_cube(bm, size=1.0)['verts']

@@ -10,8 +10,9 @@ for sc in ${FULL-ichiban central tokyu toho plaza goldengai hanazono}; do
   rm -f /tmp/dio_raw_$sc.glb /tmp/dio_w_$sc.glb
 done
 for sc in ${LODS-ichiban central tokyu toho plaza goldengai hanazono}; do
+  if [ $sc = ichiban ]; then RAT=0.6; ERR=0.0015; else RAT=0.25; ERR=0.01; fi  # v20: keep gate detail
   $B -b --factory-startup -P blender/diorama.py -- lod /tmp/lod_raw_$sc.glb 1 $sc 2>&1 | grep -E "Error|Traceback" || true
-  (cd $GT && npx gltf-transform dedup /tmp/lod_raw_$sc.glb /tmp/lod_d.glb >/dev/null 2>&1 && npx gltf-transform weld /tmp/lod_d.glb /tmp/lod_w0.glb >/dev/null 2>&1 && npx gltf-transform simplify /tmp/lod_w0.glb /tmp/lod_w.glb --ratio 0.25 --error 0.01 >/dev/null 2>&1 && npx gltf-transform meshopt /tmp/lod_w.glb /workspace/kabukicho-map/assets/lod_$sc.glb --level high >/dev/null 2>&1)
+  (cd $GT && npx gltf-transform dedup /tmp/lod_raw_$sc.glb /tmp/lod_d.glb >/dev/null 2>&1 && npx gltf-transform weld /tmp/lod_d.glb /tmp/lod_w0.glb >/dev/null 2>&1 && npx gltf-transform simplify /tmp/lod_w0.glb /tmp/lod_w.glb --ratio $RAT --error $ERR >/dev/null 2>&1 && npx gltf-transform meshopt /tmp/lod_w.glb /workspace/kabukicho-map/assets/lod_$sc.glb --level high >/dev/null 2>&1)
   rm -f /tmp/lod_raw_$sc.glb /tmp/lod_d.glb /tmp/lod_w0.glb /tmp/lod_w.glb
 done
 ls -la assets/*.glb
