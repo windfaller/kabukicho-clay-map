@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-const AV = '?v=14'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
+const AV = '?v=15'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -89,7 +89,7 @@ bldMat.customProgramCacheKey = () => 'bld';
 const neon = neonMat(), neonSoft = neonMat(.1, 1.6);
 /* ---------- instanced kit ---------- */
 const kit = {};
-const GEO = { box: new THREE.BoxGeometry(1, 1, 1), rbox: new RoundedBoxGeometry(1, 1, 1, 2, .18), sph: new THREE.SphereGeometry(.5, 12, 8), cyl: new THREE.CylinderGeometry(.5, .5, 1, 10), cone: new THREE.ConeGeometry(.5, 1, 9), disc: new THREE.CylinderGeometry(.5, .5, 1, 14) };
+const GEO = { box: new THREE.BoxGeometry(1, 1, 1), rbox: new RoundedBoxGeometry(1, 1, 1, 2, .18), sph: new THREE.SphereGeometry(.5, 12, 8), cyl: new THREE.CylinderGeometry(.5, .5, 1, 10), cone: new THREE.ConeGeometry(.5, 1, 9), pyr: new THREE.ConeGeometry(.5, 1, 4), disc: new THREE.CylinderGeometry(.5, .5, 1, 14) };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new V3(), _p = new V3();
 function M(x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) { _e.set(rx, ry, rz, 'YXZ'); _q.setFromEuler(_e); return _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)); }
 function put(kind, geo, mat, m, color, shadow = true) { (kit[kind] ||= { geo, mat, list: [], shadow }).list.push([m.clone(), C(color)]); }
@@ -157,14 +157,19 @@ O.b.forEach(([h, kind, ni, pts], bi) => {
   if (kind === 3) return; // Tokyu Kabukicho Tower: Blender LOD (assets/map_lods.glb)
   const core = cx > -240 && cx < 230 && cz > -220 && cz < 110;
   let col = C(kind === 2 ? '#d2553d' : kind === 7 ? GGPAL[Math.floor(r() * GGPAL.length)] : kind === 8 ? '#b4644a' : kind === 4 ? '#e9e2d6' : kind === 5 ? '#f2d24a' : PAL[Math.floor(r() * PAL.length)]);
+  if (kind === 7) hv = 4.2 + r() * 3.6; // Golden Gai: true-scale 2-storey shacks on their real OSM footprints
   const top = C(kind === 2 ? '#7b4a3a' : kind === 7 ? '#5a4036' : '#cbb7a5').lerp(col, .3);
   try { (kind === 7 ? ggGeos : (areasByT[2] || []).some(A => inPoly(cx, cz, A)) ? hzGeos : bgeos).push(extrude(pts, hv, col, top)); } catch (e) { return; }
-  if (kind === 7 || (areasByT[2] || []).some(A => inPoly(cx, cz, A))) return;
+  if ((areasByT[2] || []).some(A => inPoly(cx, cz, A))) return;
   if (kind === 2) { put('roofS', GEO.cone, clay, M(cx, hv + 1.4, cz, 7, 3, 7, Math.PI / 4), '#5a3a30'); return; } // shrine hall / Golden Gai shacks: placeholders until their Blender LOD streams in
-  if (false) { // Golden Gai: tiny signs + lanterns on every shop
-    const ei = edgeFacing(pts); if (ei < 0) return; const f = edgeFrame(pts, ei);
-    put('ggSign', GEO.rbox, neonSoft, M(f.mx + f.nx * .6, 3.4 + r() * 1.5, f.mz + f.nz * .6, Math.min(f.L * .7, 2.4), .9, .25, f.ang + Math.PI / 2), NEON[Math.floor(r() * NEON.length)], false);
-    put('ggLamp', GEO.sph, neonSoft, M(f.mx + f.nx * .9, 2.4, f.mz + f.nz * .9, .6, .8, .6), r() < .6 ? '#ff5a3d' : '#ffd27a', false); return; }
+  if (kind === 7) { // Golden Gai: hip roof + 2nd-floor sign + paper lantern facing the lane, per real shack
+    let A2 = 0; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; A2 += p[0] * q[1] - q[0] * p[1]; }); const w = Math.sqrt(Math.abs(A2) / 2) * .95;
+    const ei = edgeFacing(pts); const f = ei < 0 ? null : edgeFrame(pts, ei); const ang = f ? f.ang : 0;
+    put('ggRoof', GEO.pyr, clay, M(cx, hv + .45, cz, w * 1.08, .8 + r() * .5, w * 1.08, ang + Math.PI / 4), ['#6b5a5e', '#7d4a3c', '#5d6470', '#8a6a4e', '#4f4a48', '#9a5a46'][Math.floor(r() * 6)]);
+    if (!f) return;
+    put('ggSign', GEO.rbox, neonSoft, M(f.mx + f.nx * .6, Math.min(hv - 1, 3.4 + r() * 1.5), f.mz + f.nz * .6, Math.min(f.L * .7, 2.4), .9, .25, f.ang + Math.PI / 2), NEON[Math.floor(r() * NEON.length)], false);
+    put('ggWin', GEO.box, neon, M(f.mx + f.nx * .3, hv - 1.5, f.mz + f.nz * .3, Math.min(f.L * .5, 1.6), .8, .12, f.ang + Math.PI), r() < .7 ? '#ffc77a' : '#ff9a6a', false);
+    put('ggLamp', GEO.sph, neonSoft, M(f.mx + f.nx * .7, 2.4, f.mz + f.nz * .7, .38, .55, .38), r() < .6 ? '#ff5a3d' : '#ffd27a', false); return; }
   if (r() < .5 && hv > 8) put('roofbox', GEO.rbox, clay, M(cx + (r() - .5) * 3, hv + .9, cz + (r() - .5) * 3, 2 + r() * 2, 1.8, 2 + r() * 2), '#d8d0c8');
   if (r() < .25 && hv > 12) put('tank', GEO.cyl, clay, M(cx - 2, hv + 1.6, cz + 1.5, 2, 3.2, 2), '#9fb3bf');
   if (hv < 7 || r() > (core ? .5 : .12) || [D.meta.gate, D.meta.gate2].some(g => Math.hypot(g[0] - cx, g[1] - cz) < 45)) return;
@@ -431,10 +436,10 @@ function dioProg(f) { const b = $('#dioL'); if (!b) return; b.hidden = f >= 1; b
 function poiKey(p) { if (!p) return null; if (p.hero === LMK.gate) return 'ichiban'; if (p.hero === LMK.gate2) return 'central'; if (p.k === 'tower') return 'tokyu'; if (p.k === 'toho') return 'toho'; if (p.k === 'plaza') return 'plaza'; if (p.k === 'goldengai') return 'goldengai'; if (p.k === 'shrine' && p.id === 'way/102792887') return 'hanazono'; return null; }
 /* map LODs (one file, placed at the real landmarks; they replace the procedural/OSM blocks) */
 const LODPOS = { ichiban: () => GF, central: () => GF2, tokyu: () => LMK.tower && { x: LMK.tower.x, z: LMK.tower.z, ry: LMK.tower.ry, s: 1 }, toho: () => { const g = LMK.godzilla; return g && { x: g.x - 15.5 * g.face[0], z: g.z - 15.5 * g.face[1], y: g.gy - 28.2, ry: g.ry, s: 1 }; } };
-const ggC = () => ({ x: 192.43, z: 3.58, ry: -3.0837, s: 1.572, sx: 2.430 }); // fitted to the OSM Golden Gai footprint (PCA of the 149 kind-7 shacks)
+const ggC = () => ({ x: 192.43, z: 3.58, ry: -3.0837, s: 1.572 }); // fitted to the OSM Golden Gai footprint (PCA of the 149 kind-7 shacks)
 Object.assign(LODPOS, { goldengai: ggC, hanazono: () => LMK.torii && { x: LMK.torii.x, z: LMK.torii.z, ry: LMK.torii.a + Math.PI, s: 1.5 },
   plaza: () => { const p = D.pois.find(q => q.k === 'plaza'), t = LMK.tower; return p && t && { x: p.x, z: p.z, ry: Math.atan2(t.x - p.x, t.z - p.z) + Math.PI, s: 1 }; } });
-const LODHIDE = { goldengai: 'gg', hanazono: 'hz' }, LODNEAR = { goldengai: 380, hanazono: 380, plaza: 380 }; // these stream in when the camera comes close
+const LODHIDE = { goldengai: 'gg', hanazono: 'hz' }, LODNEAR = { hanazono: 380, plaza: 380 }; // Golden Gai on the map = real OSM shacks (true scale); its Blender model is diorama-only // these stream in when the camera comes close
 /* map LODs: drop pedestrians (sub-pixel at map scale) and bake every plain-coloured mesh into one vertex-coloured mesh → ~1 draw call per landmark (+ emissive parts) */
 const lodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85 });
 function bakeLod(o) { o.updateMatrixWorld(true); const inv = o.matrixWorld.clone().invert(), gs = [], kill = [];
