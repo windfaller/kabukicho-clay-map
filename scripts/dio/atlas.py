@@ -27,4 +27,4 @@ for n in order:
   im=im.resize((tw,th),Image.LANCZOS)
   if x+tw>2048: x=0; y+=rowh+4; rowh=0
   A.paste(im,(x,y)); rects[n]=[x/2048,1-(y+th)/2048,(x+tw)/2048,1-y/2048, tw/th]; x+=tw+4; rowh=max(rowh,th)
-print(y+rowh); A.save('atlas.png'); A.save('atlas.webp',quality=82); json.dump(rects,open('rects.json','w'))
+print(y+rowh); A.save('atlas.png'); A.save('atlas_full.webp',quality=82); A.resize((A.width//2,A.height//2),Image.LANCZOS).save('atlas.webp',quality=86,method=6); json.dump(rects,open('rects.json','w'))
