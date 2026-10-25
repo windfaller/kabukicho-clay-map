@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-const AV = '?v=18'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
+const AV = '?v=19'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -144,19 +144,22 @@ function edgeFrame(pts, i) { const a = pts[i], b = pts[(i + 1) % pts.length]; co
 function extrude(pts, h, col, top) { const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))); const g = new THREE.ExtrudeGeometry(sh, { depth: Math.max(.5, h - .6), bevelEnabled: true, bevelThickness: .6, bevelSize: .6, bevelOffset: -.6, bevelSegments: 1, curveSegments: 1 }); g.rotateX(-Math.PI / 2); g.deleteAttribute('uv'); const n = g.attributes.position.count, ca = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const c = g.attributes.position.getY(i) > h - .1 ? top : col; ca[i * 3] = c.r; ca[i * 3 + 1] = c.g; ca[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); return g; }
 /* v11: the Blender clay diorama replaces the OSM blocks around the Ichibangai gate; frame = same placement as the GLB below */
 const GF = (() => { const p = inward(D.meta.gate, '歌舞伎町一番街通り', 10), dir = roadDir('歌舞伎町一番街通り', p), half = roadW('歌舞伎町一番街通り', p) / 2 + .8, fs = Math.sign(Math.sin(dir) * p[2] + Math.cos(dir) * p[3]) || 1; return { x: p[0], z: p[1], ry: dir + (fs > 0 ? Math.PI : 0), s: half * 2 / 11.6 }; })();
+const JEWELM = ['#55607e', '#b84e44', '#e08a6e', '#3f8f86', '#6a54a0', '#5468a8', '#d8a640', '#9c5080', '#5a8c5c', '#44568a', '#cc6584', '#4f9ab2'];
+let gateL = null; { gateL = new THREE.PointLight('#ff7a50', 0, 60, 2); scene.add(gateL); } // v19: warm street light under the Ichibangai gate at night
 const DIO_RECTS = [[-43, 43, -2.5, 12.5], [-23, 23, 10, 42], [-31, 31, 12, 26.5]]; // Blender x/y footprints of the exported near buildings
 const GF2 = (() => { const p = inward(D.meta.gate2, 'セントラルロード', 10), dir = roadDir('セントラルロード', p), half = roadW('セントラルロード', p) / 2 + .8, fs = Math.sign(Math.sin(dir) * p[2] + Math.cos(dir) * p[3]) || 1; return { x: p[0], z: p[1], ry: dir + (fs > 0 ? Math.PI : 0), s: half * 2 / 11.6 }; })();
-function inDio(wx, wz) { return [GF, GF2].some(F => { const dx = wx - F.x, dz = wz - F.z, c = Math.cos(F.ry), sn = Math.sin(F.ry), lx = (dx * c - dz * sn) / F.s, ly = -(dx * sn + dz * c) / F.s; return DIO_RECTS.some(([x0, x1, y0, y1]) => lx > x0 && lx < x1 && ly > y0 && ly < y1); }); }
+function inDio(wx, wz) { return [GF].some(F => { const dx = wx - F.x, dz = wz - F.z, c = Math.cos(F.ry), sn = Math.sin(F.ry), lx = (dx * c - dz * sn) / F.s, ly = -(dx * sn + dz * c) / F.s; return DIO_RECTS.some(([x0, x1, y0, y1]) => lx > x0 && lx < x1 && ly > y0 && ly < y1); }); }
 const hotel = D.pois.find(p => p.id === 'node/475090904'), pepe = D.pois.find(p => p.id === 'node/4919950721');
 O.b.forEach(([h, kind, ni, pts], bi) => {
   const r = mulberry32(bi * 7919 + 13); let hv = Math.max(3, hComp(h));
   let cx = 0, cz = 0; pts.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= pts.length; cz /= pts.length;
   if (hotel && inPoly(hotel.x, hotel.z, pts)) kind = 8; if (pepe && inPoly(pepe.x, pepe.z, pts)) kind = 9;
-  // v16: OSM blocks stay continuous through the gates (the gate LOD carries no buildings or ground of its own)
+  if (kind < 2 && inDio(cx, cz)) return; // v19: Ichibangai street block is owned by the fused Blender street (one owner per footprint)
   const info = { cx, cz, hv, pts, kind }; bldInfo.push(info); if (kind >= 3) (LMK[kind] ||= []).push(info);
   if (kind === 3) return; // Tokyu Kabukicho Tower: Blender LOD (assets/map_lods.glb)
   const core = cx > -240 && cx < 230 && cz > -220 && cz < 110;
   let col = C(kind === 2 ? '#d2553d' : kind === 7 ? GGPAL[Math.floor(r() * GGPAL.length)] : kind === 8 ? '#b4644a' : kind === 4 ? '#e9e2d6' : kind === 5 ? '#f2d24a' : PAL[Math.floor(r() * PAL.length)]);
+  if (kind < 2) { const dg = Math.hypot(cx - GF.x, cz - GF.z), w = Math.max(0, Math.min(1, 1 - (dg - 45) / 150)); if (w > 0) col.lerp(C(JEWELM[Math.floor(r() * JEWELM.length)]), w * .75); } // v19: jewel palette fades out from the fused Ichibangai street
   if (kind === 7) hv = 4.2 + r() * 3.6; // Golden Gai: true-scale 2-storey shacks on their real OSM footprints
   const top = C(kind === 2 ? '#7b4a3a' : kind === 7 ? '#5a4036' : '#cbb7a5').lerp(col, .3);
   try { (kind === 7 ? ggGeos : (areasByT[2] || []).some(A => inPoly(cx, cz, A)) ? hzGeos : bgeos).push(extrude(pts, hv, col, top)); } catch (e) { return; }
@@ -301,8 +304,8 @@ drawLED(0); ledTargets.forEach(({ info, f }) => { const w = Math.min(f.L * .7, 1
 const rcv = document.createElement('canvas'); rcv.width = rcv.height = 64; { const c = rcv.getContext('2d'), g = c.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.4, 'rgba(255,255,255,.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 64, 64); }
 const reflMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(rcv), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 });
 const reflGeo = new THREE.PlaneGeometry(1, 1); reflGeo.rotateX(-Math.PI / 2);
-coreSamples.forEach((p, k) => { if (k % 3) return; const [x, z, , a, w] = p, nx = Math.cos(a), nz = -Math.sin(a); [-1, 1].forEach(s => { if (r2() < .3) return; const o = s * w * .28; put('refl', reflGeo, reflMat, M(x + nx * o, 1.22, z + nz * o, Math.min(w * .22, 3.5), 1, 9, a), NEON[Math.floor(r2() * NEON.length)], false); }); });
-[LMK.gate, LMK.gate2].forEach((g, i) => g && put('refl', reflGeo, reflMat, M(g.x, 1.23, g.z, g.span * .9, 1, 20, g.dir), i ? '#3aa8ff' : '#ff3020', false));
+coreSamples.forEach((p, k) => { if (k % 3) return; const [x, z, , a, w] = p, nx = Math.cos(a), nz = -Math.sin(a); [-1, 1].forEach(s => { if (r2() < .3) return; const o = s * w * .28; put('refl', reflGeo, reflMat, M(x + nx * o, 1.22, z + nz * o, Math.min(w * .12, 1.6), 1, 6, a), NEON[Math.floor(r2() * NEON.length)], false); }); });
+[LMK.gate2].forEach((g, i) => g && put('refl', reflGeo, reflMat, M(g.x, 1.23, g.z, g.span * .9, 1, 20, g.dir), i ? '#3aa8ff' : '#ff3020', false));
 
 /* --- gate street scenes, after our Imagine concepts (ref/imagine_gate_*.png, ref/imagine_signs.png): shopfronts, awnings, blade signs, lamps, pedestrians, sheen --- */
 const atlasTex = new THREE.TextureLoader().load(window.SIGN_ATLAS || ''); atlasTex.colorSpace = THREE.SRGBColorSpace; atlasTex.anisotropy = 4;
@@ -354,7 +357,7 @@ const KF = [[0, '#0a1030', '#1c2550', '#7d8cff', .35, '#5a6aa8', '#1e1c30', .35,
 let lastSunQ = -1;
 function applyTime(min) { min = ((min % 1440) + 1440) % 1440; let i = 0; while (KF[i + 1][0] <= min) i++; const a = KF[i], b = KF[i + 1], f = (min - a[0]) / (b[0] - a[0]); const lc = k => a[k].clone().lerp(b[k], f), ln = k => a[k] + (b[k] - a[k]) * f;
   skyU.top.value.copy(lc(1)); skyU.hor.value.copy(lc(2)); scene.fog.color.copy(skyU.hor.value); sun.color.copy(lc(3)); sun.intensity = ln(4); hemi.color.copy(lc(5)); hemi.groundColor.copy(lc(6)); hemi.intensity = ln(7);
-  const n = ln(8); lastN = n; glbEm.forEach(m => m.emissiveIntensity = (m.userData.em[0] + n * m.userData.em[1]) * (1 + ((m.userData.emx || 1) - 1) * n)); U.night.value = n; reflMat.opacity = n * .55; renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
+  const n = ln(8); lastN = n; glbEm.forEach(m => m.emissiveIntensity = (m.userData.em[0] + n * m.userData.em[1]) * (1 + ((m.userData.emx || 1) - 1) * n)); U.night.value = n; reflMat.opacity = n * .2; if (gateL) gateL.intensity = n * 260; /* v19: subtle sheen, no smears */ renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
   const qm = Math.floor(min / 15); if (qm !== lastSunQ) { lastSunQ = qm; const m = qm * 15, day = Math.min(1, Math.max(0, (m - 330) / 840)), az = Math.PI * (.2 + .6 * day), el = n > .5 ? .95 : .4 + Math.sin(day * Math.PI) * .65; sun.position.set(Math.cos(az) * Math.cos(el) * 800, Math.sin(el) * 800, Math.sin(az) * Math.cos(el) * 400 + 300); sun.updateMatrixWorld(); } // quantised sun → no shadow crawl
   signs.forEach(s => s.color.setScalar(.8 + n * .15)); gzLight.intensity = n * 9;
   $('#clock').textContent = String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(Math.floor(min % 60)).padStart(2, '0'); }
@@ -453,8 +456,8 @@ const lodState = {}; let lodPending = 0;
 function lodLoad(k) { if (lodState[k]) return; lodState[k] = 1; lodPending++; loadGLB('assets/lod_' + k + '.glb' + AV).then(gl => { const o = gl.scene.getObjectByName('L_' + k) || gl.scene, F = LODPOS[k](); lodStrip(k, o); dioMats(o, false); o.traverse(m => { if (m.material && /^roofTile/.test(m.material.name)) m.material.color.set('#8d838c'); }); bakeLod(o); if (F) { o.position.set(F.x, F.y || 0, F.z); o.rotation.set(0, F.ry, 0); o.scale.set(F.sx || F.s, F.s, F.s); scene.add(o); LMK['lod_' + k] = o; if (LODHIDE[k] && PH[LODHIDE[k]]) PH[LODHIDE[k]].visible = false;
       const pg = o.children.find(c => /^PEDS/.test(c.name)); if (pg) pg.children.forEach((p, j) => DIO.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (j % 5) * .12, ph: j * 1.7, walk: [-42, 52] })); } }).catch(e => console.error('lod ' + k, e)).finally(() => { lodPending--; }); }
 /* v16: the map keeps only the landmark itself; diorama ground, plinths, pavements, kerbs and stand-in buildings are dropped so it sits on the real OSM street */
-const LODDROP = { ichiban: /^near_(bld|ledge|awn|curb)/, central: /^near_(bld|ledge|awn|curb)/, plaza: /^near_pave/ }, LODDROPMAT = /^(curb|frame|shopGlass|window|pave|walk|road|base|plinth|ground)/;
-function lodStrip(k, o) { const re = LODDROP[k], dead = []; o.traverse(m => { if (!m.isMesh) return; const mats = [].concat(m.material || []); if ((re && re.test(m.name)) || mats.some(x => LODDROPMAT.test(x.name || ''))) dead.push(m); }); dead.forEach(m => m.parent && m.parent.remove(m)); LMK['lodDrop_' + k] = dead.length; }
+const LODDROP = { ichiban: /^$^/, central: /^near_(bld|ledge|awn|curb)/, plaza: /^near_pave/ }, LODDROPMAT = /^(curb|frame|shopGlass|window|pave|walk|road|base|plinth|ground)/;
+function lodStrip(k, o) { if (k === 'ichiban' && gateL) { const F = GF; gateL.position.set(F.x - Math.sin(F.ry) * 8 * F.s, 7 * F.s, F.z - Math.cos(F.ry) * 8 * F.s); } const re = LODDROP[k], dead = []; o.traverse(m => { if (!m.isMesh) return; const mats = [].concat(m.material || []); if ((re && re.test(m.name)) || (k !== 'ichiban' && mats.some(x => LODDROPMAT.test(x.name || '')))) dead.push(m); }); dead.forEach(m => m.parent && m.parent.remove(m)); LMK['lodDrop_' + k] = dead.length; }
 let lodDone = false, lodT = 0; const _lv = new V3();
 function lodNear() { if (!lodDone || (lodT++ & 15)) return; Object.entries(LODNEAR).forEach(([k, R]) => { if (lodState[k]) return; const F = LODPOS[k](); if (!F) return; const c = DIO.on ? null : camera.position; if (c && Math.hypot(c.x - F.x, c.y, c.z - F.z) < R) lodLoad(k); }); }
 /* v17: far ring of real OSM blocks/roads (~3.4 x 3.3 km, assets/ring.bin.gz, streamed after the core) */
@@ -477,7 +480,7 @@ async function ringLoad() { lodPending++; try { const r = await fetch('assets/ri
   lay(rl, 9, .2, '#a99a8e', .5); if (pk.length) { const gs = pk.filter(p => p.length > 2).map(p => polyGeo(p, .12)).filter(Boolean); if (gs.length) { const pm = new THREE.Mesh(mergeGeometries(gs), gmat('#b5c99a', .3)); pm.matrixAutoUpdate = false; scene.add(pm); } }
  } catch (e) { console.error('ring', e); } finally { lodPending--; } }
 /* v17: fog + pan limits so the ring's outer edge is never visible */
-function ringFrame() { const d = camera.position.distanceTo(controls.target); { const nn = Math.min(15, Math.max(1.5, d * .04)); if (Math.abs(camera.near - nn) > .05) { camera.near = nn; camera.updateProjectionMatrix(); } } scene.fog.near = 250 + d * .75; scene.fog.far = 900 + d * 1.25; const t = controls.target, R = 520; const L = Math.hypot(t.x - CTR.x, t.z - CTR.z); if (L > R) { const k = R / L, nx = CTR.x + (t.x - CTR.x) * k, nz = CTR.z + (t.z - CTR.z) * k; camera.position.x += nx - t.x; camera.position.z += nz - t.z; t.x = nx; t.z = nz; } }
+function ringFrame() { const d = camera.position.distanceTo(controls.target); controls.maxPolarAngle = d < 90 ? 1.5 : d < 200 ? 1.5 - (d - 90) / 110 * .2 : 1.3; { const nn = Math.min(15, Math.max(1.5, d * .04)); if (Math.abs(camera.near - nn) > .05) { camera.near = nn; camera.updateProjectionMatrix(); } } scene.fog.near = 250 + d * .75; scene.fog.far = 900 + d * 1.25; const t = controls.target, R = 520; const L = Math.hypot(t.x - CTR.x, t.z - CTR.z); if (L > R) { const k = R / L, nx = CTR.x + (t.x - CTR.x) * k, nz = CTR.z + (t.z - CTR.z) * k; camera.position.x += nx - t.x; camera.position.z += nz - t.z; t.x = nx; t.z = nz; } }
 function loadLods() { ['ichiban', 'central', 'tokyu', 'toho'].forEach(lodLoad); ringLoad(); lodDone = true; const w = () => lodPending ? setTimeout(w, 50) : (glbDone = true); w(); }
 function dioPedsUpd(list, walk) { const t = U.time.value; list.forEach(p => { const W = p.walk || walk; if (W) { const [z0, L] = W; let z = p.z + p.dir * p.sp * t; z = z0 + (((z - z0) % L) + L) % L; p.o.position.z = z; } p.o.position.y = p.y + Math.abs(Math.sin(t * 7 * p.sp + p.ph)) * .06; p.o.quaternion.copy(p.q); p.o.rotateZ(Math.sin(t * 7 * p.sp + p.ph) * .05); }); }
 function dioPeds() { dioPedsUpd(DIO.peds); if (DIO.on && DIO.root) dioPedsUpd(DIO.root.userData.peds, DIO.cfg.walk); }
@@ -494,7 +497,7 @@ addEventListener('resize', () => { if (DIO.on) { const c = DIO.cfg, A = innerWid
 function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = true; } dioExit(); /* v18: no separate diorama scene; landmarks are framed in place on the continuous map */ { const k = poiKey(p); if (k && LODNEAR[k] && LODPOS[k]) lodLoad(k); }
   const a = $('#cL'); if (p.id) { a.style.display = ''; a.href = 'https://www.openstreetmap.org/' + p.id; a.textContent = T[lang].osm; } else a.style.display = 'none';
   labels.forEach(l => l.el.classList.toggle('sel', l.i === i)); document.querySelectorAll('.it').forEach(e => e.classList.toggle('sel', +e.dataset.i === i));
-  let v = bestView(poiSpec(p)); if (poiKey(p) === 'hanazono' && LMK.torii) { const F = LODPOS.hanazono(), sx = Math.sin(F.ry), sz = Math.cos(F.ry); v = [new V3(F.x + sx * 70, 45, F.z + sz * 70), new V3(F.x - sx * 12, 5, F.z - sz * 12)]; } flyTo(v[0], v[1], 1.4);
+  let v = bestView(poiSpec(p)); if (poiKey(p) === 'ichiban' && LMK.lod_ichiban) { const o = LMK.lod_ichiban; o.updateMatrixWorld(true); v = [DCFG.ichiban.p.clone().applyMatrix4(o.matrixWorld), DCFG.ichiban.t.clone().applyMatrix4(o.matrixWorld)]; } else if (poiKey(p) === 'hanazono' && LMK.torii) { const F = LODPOS.hanazono(), sx = Math.sin(F.ry), sz = Math.cos(F.ry); v = [new V3(F.x + sx * 70, 45, F.z + sz * 70), new V3(F.x - sx * 12, 5, F.z - sz * 12)]; } flyTo(v[0], v[1], 1.4);
   if (innerWidth < 700) $('#side').classList.remove('open'); }
 function closeCard() { dioExit(); sel = -1; $('#card').classList.remove('on'); labels.forEach(l => l.el.classList.remove('sel')); document.querySelectorAll('.it.sel').forEach(e => e.classList.remove('sel')); }
 const CTR = new V3(-10, 0, -20);

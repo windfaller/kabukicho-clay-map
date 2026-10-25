@@ -177,7 +177,7 @@ NAMES = [k for k in RECTS if not k.startswith('gate') and k != 'toho']
 NAMES2 = [k for k in NAMES if k[0] in 'vw'] + ['izakaya', 'hotel', 'karaoke', 'pachinko', 'yakiniku', 'snack']
 def sign(key, c, h, rz=0, back=None, d=.38, bodyc=SBACK):
     r = RECTS[key]; w = h * r[4]
-    if LOD and SCENE in ('ichiban', 'central'): return w  # v16: map LOD has no stand-in buildings, so their wall signs would float
+    if LOD and SCENE == 'central': return w  # v16: map LOD has no stand-in buildings, so their wall signs would float
     o = rbox('n_sb', bodyc, c, (w + .22, d, h + .22), bev=.16, seg=3, rz=rz)
     u0, v0, u1, v1 = r[:4]; e = .004
     off = Vector((math.sin(rz) * (d / 2 + .015), -math.cos(rz) * (d / 2 + .015), 0))
