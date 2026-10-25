@@ -369,12 +369,45 @@ function desc(p) { const t = T[lang], L = LI[lang], c = (KCAT[p.k] || KCAT.venue
 /* ---------- selection / camera ---------- */
 let sel = -1, fly = null; const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function flyTo(pos, tgt, dur = 1.2) { fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: tgt, k: RM ? .999 : 0, dur }; }
-function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = !(p.hero === LMK.gate); }
+
+/* --- hero diorama: our Imagine clay concept turned into a 2.5D scene (concept painting projected onto a depth-displaced mesh; depth from Depth Anything V2) --- */
+const DIO = { on: false, ready: false, yaw: 0, pitch: 0, dist: 1, ty: 0, tp: 0, td: 1, drag: null };
+const dScene = new THREE.Scene(); dScene.background = C('#241c34'); const dCam = new THREE.PerspectiveCamera(40, 4 / 3, .5, 600);
+const dU = { tDay: { value: null }, tNight: { value: null }, uNight: U.night };
+function dioBuild() { if (DIO.mesh || DIO.loading) return; DIO.loading = true; const tl = new THREE.TextureLoader(); let n = 0; const done = () => { if (++n < 3) return; DIO.ready = true; };
+  ['day', 'night'].forEach(k => tl.load(`assets/hero_${k}.webp`, tx => { tx.colorSpace = THREE.NoColorSpace; tx.anisotropy = 4; dU[k === 'day' ? 'tDay' : 'tNight'].value = tx; done(); }, undefined, e => console.error('hero tex', e)));
+  const im = new Image(); im.onload = () => { const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height; const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0); const px = cx.getImageData(0, 0, im.width, im.height).data;
+    const W = im.width, H = im.height, Dp = new Float32Array(W * H); for (let i = 0; i < W * H; i++) Dp[i] = px[i * 4] / 255;
+    const minF = (src, r) => { const t = new Float32Array(W * H), o = new Float32Array(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let m = 1; for (let k = -r; k <= r; k++) m = Math.min(m, src[y * W + Math.min(W - 1, Math.max(0, x + k))]); t[y * W + x] = m; }
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let m = 1; for (let k = -r; k <= r; k++) m = Math.min(m, t[Math.min(H - 1, Math.max(0, y + k)) * W + x]); o[y * W + x] = m; } return o; };
+    const blur = (src, r) => { let a = src; for (const ax of [0, 1]) { const o = new Float32Array(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let t = 0; for (let k = -r; k <= r; k++) { const xx = ax ? x : Math.min(W - 1, Math.max(0, x + k)), yy = ax ? Math.min(H - 1, Math.max(0, y + k)) : y; t += a[yy * W + xx]; } o[y * W + x] = t / (2 * r + 1); } a = o; } return a; };
+    const Db = blur(minF(Dp, 12), 10), GX = 216, GY = 162, tv = Math.tan(20 * Math.PI / 180), th = tv * 4 / 3;
+    const mk = (D, cut) => { const g = new THREE.PlaneGeometry(1, 1, GX, GY), P = g.attributes.position, UV = g.attributes.uv, E = new Float32Array(P.count);
+      const at = (u, v) => D[Math.min(H - 1, Math.max(0, Math.round((1 - v) * (H - 1)))) * W + Math.min(W - 1, Math.max(0, Math.round(u * (W - 1))))];
+      for (let i = 0; i < P.count; i++) { const u = UV.getX(i), v = UV.getY(i), d = at(u, v), z = 1 / (.0415 * d + .00584); P.setXYZ(i, (2 * u - 1) * th * z, (2 * v - 1) * tv * z, -z);
+        if (cut) { let j = 0; for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) j = Math.max(j, Math.abs(at(u + du / GX, v + dv / GY) - d)); E[i] = j > .06 ? 1 : 0; } }
+      g.setAttribute('edge', new THREE.BufferAttribute(E, 1)); g.computeBoundingSphere(); return g; };
+    const mat = cut => new THREE.ShaderMaterial({ uniforms: dU, vertexShader: 'attribute float edge; varying float vE; varying vec2 vUv; void main(){ vUv = uv; vE = edge; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+      fragmentShader: 'uniform sampler2D tDay, tNight; uniform float uNight; varying vec2 vUv; varying float vE; void main(){ ' + (cut ? 'if (vE > .02) discard; ' : '') + 'gl_FragColor = vec4(mix(texture2D(tDay, vUv).rgb, texture2D(tNight, vUv).rgb, smoothstep(.3, .75, uNight)), 1.); }' });
+    const back = new THREE.Mesh(mk(Db, false), mat(false)); back.renderOrder = 0; dScene.add(back);
+    DIO.mesh = new THREE.Mesh(mk(Dp, true), mat(true)); DIO.mesh.renderOrder = 1;
+    dScene.add(DIO.mesh); done(); }; im.onerror = e => console.error('hero depth', e); im.src = 'assets/hero_depth.png'; }
+function dioCam(dt) { const k = Math.min(1, dt * 6); DIO.yaw += (DIO.ty - DIO.yaw) * k; DIO.pitch += (DIO.tp - DIO.pitch) * k; DIO.dist += (DIO.td - DIO.dist) * k;
+  const sway = FREEZE || !playing ? 0 : Math.sin(U.time.value * .25) * .012, A = innerWidth / innerHeight, tv0 = Math.tan(20 * Math.PI / 180), z0 = 1.06, tv = (A > 4 / 3 || A < 1) ? tv0 * 4 / 3 / z0 / A : tv0 / z0, R = 22.5 * DIO.dist, y = DIO.yaw + sway;
+  dCam.aspect = A; dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.updateProjectionMatrix();
+  dCam.position.set(Math.sin(y) * R, Math.sin(DIO.pitch) * R, -22.5 + Math.cos(y) * Math.cos(DIO.pitch) * R); dCam.lookAt(0, 0, -22.5); }
+function dioEnter(p) { dioBuild(); DIO.on = true; DIO.yaw = DIO.ty = DIO.pitch = DIO.tp = 0; DIO.dist = DIO.td = 1; document.body.classList.add('dio'); $('#dioN').textContent = nmOf(p.nm); $('#dioBar').hidden = false; }
+function dioExit() { if (!DIO.on) return; DIO.on = false; document.body.classList.remove('dio'); $('#dioBar').hidden = true; }
+renderer.domElement.addEventListener('pointerdown', e => { if (DIO.on) DIO.drag = [e.clientX, e.clientY, DIO.ty, DIO.tp]; });
+addEventListener('pointermove', e => { if (DIO.on && DIO.drag) { DIO.ty = Math.max(-.08, Math.min(.08, DIO.drag[2] - (e.clientX - DIO.drag[0]) / innerWidth * .3)); DIO.tp = Math.max(-.02, Math.min(.05, DIO.drag[3] + (e.clientY - DIO.drag[1]) / innerHeight * .2)); } });
+addEventListener('pointerup', () => { DIO.drag = null; });
+renderer.domElement.addEventListener('wheel', e => { if (DIO.on) { DIO.td = Math.max(.86, Math.min(1.03, DIO.td * (1 + Math.sign(e.deltaY) * .05))); } }, { passive: true });
+function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = !(p.hero === LMK.gate); } if (p.hero === LMK.gate) dioEnter(p); else dioExit();
   const a = $('#cL'); if (p.id) { a.style.display = ''; a.href = 'https://www.openstreetmap.org/' + p.id; a.textContent = T[lang].osm; } else a.style.display = 'none';
   labels.forEach(l => l.el.classList.toggle('sel', l.i === i)); document.querySelectorAll('.it').forEach(e => e.classList.toggle('sel', +e.dataset.i === i));
   const v = bestView(poiSpec(p)); flyTo(v[0], v[1], 1.4);
   if (innerWidth < 700) $('#side').classList.remove('open'); }
-function closeCard() { sel = -1; $('#card').classList.remove('on'); labels.forEach(l => l.el.classList.remove('sel')); document.querySelectorAll('.it.sel').forEach(e => e.classList.remove('sel')); }
+function closeCard() { dioExit(); sel = -1; $('#card').classList.remove('on'); labels.forEach(l => l.el.classList.remove('sel')); document.querySelectorAll('.it.sel').forEach(e => e.classList.remove('sel')); }
 const CTR = new V3(-10, 0, -20);
 function panoPos() { const a = camera.aspect, hf = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * a), vf = THREE.MathUtils.degToRad(camera.fov / 2); const R = a < .8 ? 215 : 360; const d = Math.max(R / Math.tan(hf), R * .8 / Math.tan(vf)) * (a < .8 ? .95 : .92); const L = d * 1.08; scene.fog.near = L * 1.3; scene.fog.far = L * 3.5; return CTR.clone().add(new V3(d * .42, d * .78, d * .62)); }
 function pano() { closeCard(); flyTo(panoPos(), CTR.clone()); }
@@ -448,11 +481,11 @@ document.querySelectorAll('#hud [data-t]').forEach(b => b.onclick = () => { simT
 $('#playBtn').onclick = () => { playing = !playing; $('#playBtn').textContent = playing ? '❚❚' : '▶'; $('#playBtn').title = playing ? T[lang].pause : T[lang].play; }; $('#playBtn').textContent = playing ? '❚❚' : '▶';
 $('#panoBtn').onclick = pano; $('#tourBtn').onclick = tour; $('#birdBtn').onclick = bird; $('#listBtn').onclick = () => $('#side').classList.toggle('open'); $('#routeBtn').onclick = () => $('#route').classList.toggle('on');
 $('#langSel').onchange = e => { lang = e.target.value; localStorage.setItem('kbLang', lang); const u = new URL(location); u.searchParams.set('lang', lang); history.replaceState(null, '', u); applyLang(); };
-$('#cardX').onclick = closeCard; $('#q').oninput = buildList; $('#compass').onclick = northUp;
+$('#dioX').onclick = () => closeCard(); $('#cardX').onclick = closeCard; $('#q').oninput = buildList; $('#compass').onclick = northUp;
 $('#rGo').onclick = () => routeBetween(+$('#rFrom').value, +$('#rTo').value); $('#rSwap').onclick = () => { const a = $('#rFrom').value; $('#rFrom').value = $('#rTo').value; $('#rTo').value = a; if (routeInfo) $('#rGo').onclick(); }; $('#rClr').onclick = clearRoute;
 $('#bFrom').onclick = () => { $('#rFrom').value = sel; $('#route').classList.add('on'); if (+$('#rTo').value >= 0) $('#rGo').onclick(); }; $('#bTo').onclick = () => { $('#rTo').value = sel; $('#route').classList.add('on'); if (+$('#rFrom').value >= 0) $('#rGo').onclick(); };
 const keys = new Set();
-addEventListener('keydown', e => { if (e.target.closest('input,select,textarea')) { if (e.key === 'Escape') e.target.blur(); return; } const k = e.key.toLowerCase();
+addEventListener('keydown', e => { if (DIO.on && e.key === 'Escape') { closeCard(); return; } if (e.target.closest('input,select,textarea')) { if (e.key === 'Escape') e.target.blur(); return; } const k = e.key.toLowerCase();
   if (k === 'escape') { closeCard(); $('#route').classList.remove('on'); $('#side').classList.remove('open'); } else if (k === 'r') pano(); else if (k === 'b') bird(); else if (k === 'n') northUp(); else if (k === '/') { e.preventDefault(); if (innerWidth < 700) $('#side').classList.add('open'); $('#q').focus(); } else if (k === ' ') { e.preventDefault(); $('#playBtn').onclick(); } else keys.add(k); });
 addEventListener('keyup', e => keys.delete(e.key.toLowerCase())); addEventListener('blur', () => keys.clear());
 function keyNav(dt) { if (!keys.size) return; const off = camera.position.clone().sub(controls.target), d = off.length(); const fwd = off.clone().setY(0).normalize().negate(), right = new V3(-fwd.z, 0, fwd.x), mv = new V3(), sp = d * .9 * dt;
@@ -469,7 +502,8 @@ function frame() { const dt = Math.min(clock.getDelta(), .1); renderer.info.rese
   if (!FREEZE) { stepAgents(dt); U.time.value += dt; if (++ledF % 4 === 0) drawLED(U.time.value); }
   keyNav(dt);
   if (fly) { fly.k = Math.min(1, fly.k + dt / fly.dur); const e = 1 - Math.pow(1 - fly.k, 3); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e); if (fly.k >= 1) fly = null; }
-  controls.update(); bloom.strength = bloomBase * Math.min(1, Math.max(.35, camera.position.distanceTo(controls.target) / 380)); composer.render(); lr.render(scene, camera); layoutLabels();
+  if (DIO.on && DIO.ready) { dioCam(dt); renderer.render(dScene, dCam); lr.domElement.style.visibility = 'hidden'; } else { lr.domElement.style.visibility = '';
+  controls.update(); bloom.strength = bloomBase * Math.min(1, Math.max(.35, camera.position.distanceTo(controls.target) / 380)); composer.render(); lr.render(scene, camera); layoutLabels(); }
   const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z); if (Math.abs(az - lastAz) > .002) { lastAz = az; $('#needle').style.transform = `rotate(${az}rad)`; }
   if (++fc % 6 === 0) drawMini(); }
 $('#load').style.display = 'none'; renderer.setAnimationLoop(frame);
@@ -477,6 +511,6 @@ $('#load').style.display = 'none'; renderer.setAnimationLoop(frame);
 { const rc = new THREE.Raycaster(), pk = ['gatePost', 'gateTube', 'gateBox', 'gateTrim', 'gateFoot'].map(k => kit[k] && kit[k].im).filter(Boolean); let down = null;
   canvas.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; const r = canvas.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera); const h = rc.intersectObjects(pk, false)[0]; if (!h) return; let bi = -1, bd = 1e9; pois.forEach((p, i) => { if (!p.hero) return; const d = Math.hypot(p.hero.x - h.point.x, p.hero.z - h.point.z); if (d < bd) { bd = d; bi = i; } }); if (bi >= 0 && bd < 30) select(bi); }); }
-if (TEST) window.__kb = { get ready() { return glbDone; }, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
+if (TEST) window.__kb = { get ready() { return glbDone; }, dio: on => on ? dioEnter(pois[sel] || pois[0]) : dioExit(), dioReady: () => DIO.ready, dioView: (y, p, d) => { DIO.yaw = DIO.ty = y; DIO.pitch = DIO.tp = p; DIO.dist = DIO.td = d; }, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
 }
 main().catch(fail);
