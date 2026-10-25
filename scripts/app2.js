@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-const AV = '?v=26'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
+const AV = '?v=31'; // cache-buster: /assets/* is served immutable, so bump on every asset rebuild
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';

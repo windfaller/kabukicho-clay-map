@@ -328,7 +328,7 @@ def gate_street():
         for yy in list(range(5, 150, 9)):
             put(lampM, 'i_lamp', (s * 5.25, yy, .3))
         for xx in (17, 23): put(lampM, 'i_lamp', (s * xx, -5.3, .3))  # v22: no lamp right in front of the gate view
-    clouds(CLOUDS_STREET); peds([((-4.0, 3, .02), (4.0, 40, .02))] * 10 + [((-6.4, -8, .3), (6.4, -3, .3))] * 4, 0)
+    clouds(CLOUDS_STREET); peds([((-4.0, 3, .02), (4.0, 40, .02))] * 10 + [((-6.4, -8, 1.35), (6.4, -3, 1.35))] * 4 + [((-5.5, -16, 1.35), (5.5, -9, 1.35))] * 6 + [((-4.0, 2, .02), (4.0, 24, .02))] * 4, 0)  # v31: concept crowd walking into the gate; front crowd lifted onto the map road (was sunk to the chest)
 
 # ---------------- v12: more landmarks (same clay kit) ----------------
 BLUE = mat('gateBlue', '#2f63c8', .5, em='#3070ff', ems=.12)
