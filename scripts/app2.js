@@ -434,8 +434,17 @@ const ggC = () => { const p = D.pois.find(q => q.n === '新宿ゴールデン街
 Object.assign(LODPOS, { goldengai: ggC, hanazono: () => LMK.torii && { x: LMK.torii.x, z: LMK.torii.z, ry: LMK.torii.a + Math.PI, s: 1.5 },
   plaza: () => { const p = D.pois.find(q => q.k === 'plaza'), t = LMK.tower; return p && t && { x: p.x, z: p.z, ry: Math.atan2(t.x - p.x, t.z - p.z) + Math.PI, s: 1 }; } });
 const LODHIDE = { goldengai: 'gg', hanazono: 'hz' }, LODNEAR = { goldengai: 380, hanazono: 380, plaza: 380 }; // these stream in when the camera comes close
+/* map LODs: drop pedestrians (sub-pixel at map scale) and bake every plain-coloured mesh into one vertex-coloured mesh → ~1 draw call per landmark (+ emissive parts) */
+const lodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85 });
+function bakeLod(o) { o.updateMatrixWorld(true); const inv = o.matrixWorld.clone().invert(), gs = [], kill = [];
+  o.children.filter(c => /^PEDS/.test(c.name)).forEach(c => o.remove(c));
+  o.traverse(m => { if (!m.isMesh || m.isInstancedMesh) return; const mt = m.material; if (EMK2[mt.name] || mt.map || mt.transparent) return;
+    const g = f32(m.geometry); g.deleteAttribute('uv'); if (!g.index) g.setIndex(Array.from({ length: g.attributes.position.count }, (_, i) => i)); if (!g.attributes.normal) g.computeVertexNormals();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)); const n = g.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = mt.color.r; c[i * 3 + 1] = mt.color.g; c[i * 3 + 2] = mt.color.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3)); gs.push(g); kill.push(m); });
+  if (!gs.length) return; kill.forEach(m => m.parent.remove(m)); const me = new THREE.Mesh(mergeGeometries(gs), lodMat); me.castShadow = me.receiveShadow = true; me.name = 'baked'; o.add(me); }
 const lodState = {}; let lodPending = 0;
-function lodLoad(k) { if (lodState[k]) return; lodState[k] = 1; lodPending++; loadGLB('assets/lod_' + k + '.glb').then(gl => { const o = gl.scene.getObjectByName('L_' + k) || gl.scene, F = LODPOS[k](); dioMats(o, false); o.traverse(m => { if (m.material && /^roofTile/.test(m.material.name)) m.material.color.set('#8d838c'); }); if (F) { o.position.set(F.x, F.y || 0, F.z); o.rotation.set(0, F.ry, 0); o.scale.setScalar(F.s); scene.add(o); LMK['lod_' + k] = o; if (LODHIDE[k] && PH[LODHIDE[k]]) PH[LODHIDE[k]].visible = false;
+function lodLoad(k) { if (lodState[k]) return; lodState[k] = 1; lodPending++; loadGLB('assets/lod_' + k + '.glb').then(gl => { const o = gl.scene.getObjectByName('L_' + k) || gl.scene, F = LODPOS[k](); dioMats(o, false); o.traverse(m => { if (m.material && /^roofTile/.test(m.material.name)) m.material.color.set('#8d838c'); }); bakeLod(o); if (F) { o.position.set(F.x, F.y || 0, F.z); o.rotation.set(0, F.ry, 0); o.scale.setScalar(F.s); scene.add(o); LMK['lod_' + k] = o; if (LODHIDE[k] && PH[LODHIDE[k]]) PH[LODHIDE[k]].visible = false;
       const pg = o.children.find(c => /^PEDS/.test(c.name)); if (pg) pg.children.forEach((p, j) => DIO.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (j % 5) * .12, ph: j * 1.7, walk: [-42, 52] })); } }).catch(e => console.error('lod ' + k, e)).finally(() => { lodPending--; }); }
 let lodDone = false, lodT = 0; const _lv = new V3();
 function lodNear() { if (!lodDone || (lodT++ & 15)) return; Object.entries(LODNEAR).forEach(([k, R]) => { if (lodState[k]) return; const F = LODPOS[k](); if (!F) return; const c = DIO.on ? null : camera.position; if (c && Math.hypot(c.x - F.x, c.y, c.z - F.z) < R) lodLoad(k); }); }
