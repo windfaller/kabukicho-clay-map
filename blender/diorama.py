@@ -42,6 +42,7 @@ def rbox_bm(bm, c, size, bev, seg, mi=0, rz=0):
     for v in bm.verts: v.tag = True
     r = bmesh.ops.create_cube(bm, size=1.0)['verts']
     for v in r: v.co = Vector((v.co.x * size[0], v.co.y * size[1], v.co.z * size[2])); v.tag = False
+    if LOD: seg = 1; bev = bev if max(size) > 6 else 0  # small parts: plain boxes at map scale
     if bev > 0:
         es = list({e for v in r for e in v.link_edges})
         bmesh.ops.bevel(bm, geom=es, offset=min(bev, min(size) * .48), segments=seg, affect='EDGES', profile=.5)
@@ -56,6 +57,7 @@ def mesh_of(fn, name, mats):
 def rbox(name, m, c, size, bev=.3, seg=3, rz=0):
     me = mesh_of(lambda bm: rbox_bm(bm, Vector((0, 0, 0)), size, bev, seg), name, [m]); return put(me, name, c, rz)
 def cyl_bm(bm, c, r, h, verts=24, mi=0, bev=0, r2=None):
+    if LOD: verts = max(6, verts // 3); bev = 0
     g = bmesh.ops.create_cone(bm, cap_ends=True, segments=verts, radius1=r, radius2=r2 if r2 is not None else r, depth=h, matrix=Matrix.Translation(c))
     vs = g['verts']
     if bev:
@@ -64,6 +66,7 @@ def cyl_bm(bm, c, r, h, verts=24, mi=0, bev=0, r2=None):
     for f in {f for v in bm.verts for f in v.link_faces if not v.tag}: f.material_index = mi; f.smooth = True
     for v in bm.verts: v.tag = True
 def sph_bm(bm, c, r, mi=0, sub=2, scl=(1, 1, 1)):
+    if LOD: sub = 1
     bmesh.ops.create_icosphere(bm, subdivisions=sub, radius=1, matrix=Matrix.Translation(c) @ Matrix.Diagonal((*[r * s for s in scl], 1)))
     for f in {f for v in bm.verts for f in v.link_faces if not v.tag}: f.material_index = mi; f.smooth = True
     for v in bm.verts: v.tag = True
@@ -106,7 +109,7 @@ def build_gate(RED, GKEY):
     loop = [(-S, 3.7), (-S, TOP - R)] + arc(-S + R, TOP - R, R, math.pi, math.pi / 2)[1:] + [(-S + R + (2 * S - 2 * R) * k / 8, TOP + .12 * math.sin(math.pi * k / 8)) for k in range(1, 8)] + arc(S - R, TOP - R, R, math.pi / 2, 0) + [(S, 3.7)]
     low = arc(-S + RI, LB + RI, RI, math.pi, 1.5 * math.pi, 7) + [(-S + RI + (2 * S - 2 * RI) * k / 12, LB - .22 * math.sin(math.pi * k / 12)) for k in range(1, 12)] + arc(S - RI, LB + RI, RI, 1.5 * math.pi, 2 * math.pi, 7)
     def tube(pts, name, TR=TR, RED=RED):
-        cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = TR; cu.bevel_resolution = 6; cu.use_fill_caps = True
+        cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = TR; cu.bevel_resolution = 1 if LOD else 6; cu.use_fill_caps = True
         sp = cu.splines.new('BEZIER'); sp.bezier_points.add(len(pts) - 1)
         for p, (x, z) in zip(sp.bezier_points, pts): p.co = (x, 0, z); p.handle_left_type = p.handle_right_type = 'AUTO'
         cu.resolution_u = 4; o = bpy.data.objects.new(name, cu); COL.objects.link(o); cu.materials.append(RED)
@@ -170,7 +173,7 @@ lampM = mesh_of(lamp, 'lampM', [IRON, LANT])
 balM = mesh_of(lambda bm: rbox_bm(bm, Vector((0, 0, 0)), (1.3, .55, .2), .08, 2), 'balM', [CURB])
 
 # ---------------- signs ----------------
-NAMES = [k for k in RECTS if not k.startswith('gate')]
+NAMES = [k for k in RECTS if not k.startswith('gate') and k != 'toho']
 NAMES2 = [k for k in NAMES if k[0] in 'vw'] + ['izakaya', 'hotel', 'karaoke', 'pachinko', 'yakiniku', 'snack']
 def sign(key, c, h, rz=0, back=None, d=.38, bodyc=SBACK):
     r = RECTS[key]; w = h * r[4]
@@ -320,7 +323,7 @@ LEAF = mat('leaf', '#4f8f4a', .95, grain=.4); TRUNK = mat('trunk', '#6e4a34', .9
 WATER = mat('water', '#8fc8e8', .1, em='#9fd8ff', ems=.2, grain=0); WIRE = mat('wire', '#2a2a30', .6)
 LRED = mat('lanternRed', '#ff5a3d', .4, em='#ff4a2a', ems=2.0, grain=0)
 def tube3(pts, name, r, m, res=6):
-    cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = r; cu.bevel_resolution = 3; cu.use_fill_caps = True
+    cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = r; cu.bevel_resolution = 1 if LOD else 3; cu.use_fill_caps = True
     sp = cu.splines.new('BEZIER'); sp.bezier_points.add(len(pts) - 1)
     for p, c in zip(sp.bezier_points, pts): p.co = c; p.handle_left_type = p.handle_right_type = 'AUTO'
     cu.resolution_u = res
@@ -419,7 +422,7 @@ def godzilla(ox, oy, oz, S=1.0):
 def build_toho():
     FARM[0] = True
     tower(-24, 24, -20, 20, 28, 0, ['-y', '+y', '-x', '+x'], shop='-y', seed=4, wstep=3.4, fl=3.6, mb=TOHO, ml=TOHOL, wsc=2.0)
-    rbox('n_tsb', SBACK, (9, -20.35, 15.5), (6.4, .8, 15.4), bev=.5, seg=3); rbox('n_tsl', SLIGHT, (9, -20.8, 15.5), (5.2, .4, 14), bev=.4, seg=3)
+    rbox('n_tsb', SBACK, (9, -20.35, 15.5), (6.4, .8, 15.4), bev=.5, seg=3); sign('toho', (9, -20.9, 15.5), 14.6, 0, d=.3)  # our Imagine sign (ref/imagine_toho_sign.jpg)
     for x in (-15, 15):
         rbox('n_awn', AWN[0 if x < 0 else 4], (x, -21.6, 4.3), (8, 2.6, .35), bev=.15, seg=2).rotation_euler = (math.radians(-16), 0, 0)
     FARM[0] = False
@@ -454,7 +457,7 @@ def build_plaza():
     for x, y, r in ((-9, -4, .3), (9, -4, -.3), (0, 11, 0)):
         rbox('n_bench', WOOD[2], (x, y, .6), (3.6, .9, .25), bev=.1, seg=2, rz=r); rbox('n_bench', WOOD[3], (x, y, .3), (3.0, .6, .5), bev=.1, seg=2, rz=r)
     for x, y in ((-20, -14), (20, -14), (-20, 14), (20, 14), (-8, 18), (8, 18)): put(lampM, 'i_lamp', (x, y, .2))
-    rr = random.Random(9)
+    rr = random.Random(9); FARM[0] = True  # surrounding blocks: diorama only (the map has the real OSM blocks)
     for side, (x0, x1, y0, y1, faces) in enumerate([(-50, -30, -22, 26, ['+x', '-y']), (30, 50, -22, 26, ['-x', '-y']), (-30, 30, 24, 40, ['-y'])]):
         if side < 2:
             y = y0
@@ -470,7 +473,7 @@ def build_plaza():
                 tower(x, x + L - .4, y0, y1, h, rr.randrange(12), faces, shop='-y', seed=300 + int(x), balc=.15)
                 key = rr.choice(NAMES2); sign(key, (x + L / 2, y0 - .3, rr.uniform(5, min(h - 2, 11))), 2.8 if RECTS[key][4] < 1.2 else 1.6, 0, d=.35)
                 x += L
-    FARM[0] = True; build_tokyu(0, 95, .5); FARM[0] = False
+    build_tokyu(0, 95, .5); FARM[0] = False
     ground(0, 20, 110, 150, None)
     clouds([(-30, 60, 60), (30, 70, 70), (0, 120, 80), (-60, -10, 50), (60, -20, 55)], 1.4)
     peds([((-24, -20, .2), (24, 20, .2))] * 14, 7)
@@ -488,8 +491,8 @@ def shack(x, y, side, rr):
     lm = LRED if rr.random() < .6 else LANT
     sph('n_ggl', lm, (x + f * 2.5, y + W * .32, h1 - .55), .32, (1, 1, 1.35), 1)
     if rr.random() < .8:
-        key = rr.choice(NAMES2); r = RECTS[key]; hh = .9 if r[4] < 1.2 else .55
-        sign(key, (x + f * 2.6, y - W * .25, h1 + .55 + rr.uniform(0, 1.2)), hh, -f * math.pi / 2 + math.pi, d=.18)
+        key = rr.choice(NAMES2); r = RECTS[key]; hh = .9 if r[4] < 1.2 else .55; zz_ = rr.uniform(0, 1.2)
+        if not LOD: sign(key, (x + f * 2.6, y - W * .25, h1 + .55 + zz_), hh, -f * math.pi / 2 + math.pi, d=.18)
     return W
 def build_goldengai():
     rr = random.Random(12)
@@ -541,7 +544,7 @@ def build_hanazono():
     FARM[0] = False
     rbox('g_pave', PAVE, (0, 28, .08), (30, 66, .16), bev=.05, seg=1)
     rbox('g_road', ROAD, (0, -8, .02), (80, 10, .1), bev=0, seg=1)
-    ring(0, 26, 46, 12, 26, 16, 71, gap=(0, .45))
+    FARM[0] = True; ring(0, 26, 46, 12, 26, 16, 71, gap=(0, .45)); FARM[0] = False
     ground(0, 22, 110, 110, None)
     clouds([(-25, 50, 40), (25, 60, 45), (0, 90, 50), (-50, -20, 38), (50, -30, 42)], 1.3)
     peds([((-1.8, 4, .25), (1.8, 34, .25))] * 6 + [((-30, -10, .1), (30, -6, .1))] * 3, 11)

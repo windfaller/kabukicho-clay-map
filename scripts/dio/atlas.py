@@ -7,6 +7,7 @@ crops={'gate':(239,180,596,288),'izakaya':(16,45,82,222),'hotel':(114,163,163,28
 's1':(70,400,115,432),'s2':(130,393,165,421),'f1':(250,355,272,410),'f2':(303,382,325,430),'f3':(475,401,495,447),'f4':(537,365,555,420)}
 ims={n:F.crop(tuple(round(v*k) for v in b)) for n,b in crops.items()}
 C2=Image.open('../ref/concept_central.jpg').convert('RGB'); ims['gate2']=C2.crop(tuple(round(v*1.125) for v in (300,222,746,360)))
+ims['toho']=Image.open('../ref/imagine_toho_sign.jpg').convert('RGB').crop((95,35,482,985))
 S2=Image.open('../ref/imagine_signs2.jpg').convert('RGB')
 from scipy import ndimage
 import numpy as np
@@ -20,7 +21,7 @@ x=y=0; rowh=0
 order=['gate','gate2']+[n for n in ims if n not in('gate','gate2')]
 for n in order:
   im=ims[n]; w,h=im.size
-  th=318 if n in('gate','gate2') else (300 if h>w*1.3 else 200 if h>w*.8 else 160)
+  th=318 if n in('gate','gate2') else 420 if n=='toho' else (300 if h>w*1.3 else 200 if h>w*.8 else 160)
   if n in('gate','gate2'): tw=1024
   else: tw=round(w*th/h)
   im=im.resize((tw,th),Image.LANCZOS)
