@@ -144,7 +144,8 @@ function extrude(pts, h, col, top) { const sh = new THREE.Shape(pts.map(([x, z])
 /* v11: the Blender clay diorama replaces the OSM blocks around the Ichibangai gate; frame = same placement as the GLB below */
 const GF = (() => { const p = inward(D.meta.gate, '歌舞伎町一番街通り', 10), dir = roadDir('歌舞伎町一番街通り', p), half = roadW('歌舞伎町一番街通り', p) / 2 + .8, fs = Math.sign(Math.sin(dir) * p[2] + Math.cos(dir) * p[3]) || 1; return { x: p[0], z: p[1], ry: dir + (fs > 0 ? Math.PI : 0), s: half * 2 / 11.6 }; })();
 const DIO_RECTS = [[-43, 43, -2.5, 12.5], [-23, 23, 10, 42], [-31, 31, 12, 26.5]]; // Blender x/y footprints of the exported near buildings
-function inDio(wx, wz) { const dx = wx - GF.x, dz = wz - GF.z, c = Math.cos(GF.ry), sn = Math.sin(GF.ry), lx = (dx * c - dz * sn) / GF.s, ly = -(dx * sn + dz * c) / GF.s; return DIO_RECTS.some(([x0, x1, y0, y1]) => lx > x0 && lx < x1 && ly > y0 && ly < y1); }
+const GF2 = (() => { const p = inward(D.meta.gate2, 'セントラルロード', 10), dir = roadDir('セントラルロード', p), half = roadW('セントラルロード', p) / 2 + .8, fs = Math.sign(Math.sin(dir) * p[2] + Math.cos(dir) * p[3]) || 1; return { x: p[0], z: p[1], ry: dir + (fs > 0 ? Math.PI : 0), s: half * 2 / 11.6 }; })();
+function inDio(wx, wz) { return [GF, GF2].some(F => { const dx = wx - F.x, dz = wz - F.z, c = Math.cos(F.ry), sn = Math.sin(F.ry), lx = (dx * c - dz * sn) / F.s, ly = -(dx * sn + dz * c) / F.s; return DIO_RECTS.some(([x0, x1, y0, y1]) => lx > x0 && lx < x1 && ly > y0 && ly < y1); }); }
 const hotel = D.pois.find(p => p.id === 'node/475090904'), pepe = D.pois.find(p => p.id === 'node/4919950721');
 O.b.forEach(([h, kind, ni, pts], bi) => {
   const r = mulberry32(bi * 7919 + 13); let hv = Math.max(3, hComp(h));
@@ -152,7 +153,7 @@ O.b.forEach(([h, kind, ni, pts], bi) => {
   if (hotel && inPoly(hotel.x, hotel.z, pts)) kind = 8; if (pepe && inPoly(pepe.x, pepe.z, pts)) kind = 9;
   if (kind < 2 && inDio(cx, cz)) return;
   const info = { cx, cz, hv, pts, kind }; bldInfo.push(info); if (kind >= 3) (LMK[kind] ||= []).push(info);
-  if (kind === 3) return; // Tokyu Kabukicho Tower: custom model below
+  if (kind === 3) return; // Tokyu Kabukicho Tower: Blender LOD (assets/map_lods.glb)
   const core = cx > -240 && cx < 230 && cz > -220 && cz < 110;
   let col = C(kind === 2 ? '#d2553d' : kind === 7 ? GGPAL[Math.floor(r() * GGPAL.length)] : kind === 8 ? '#b4644a' : kind === 4 ? '#e9e2d6' : kind === 5 ? '#f2d24a' : PAL[Math.floor(r() * PAL.length)]);
   const top = C(kind === 2 ? '#7b4a3a' : kind === 7 ? '#5a4036' : '#cbb7a5').lerp(col, .3);
@@ -177,6 +178,7 @@ O.b.forEach(([h, kind, ni, pts], bi) => {
 /* canvas text sign helper (plain text, no logos) */
 function textSign(lines, w, h, bg, fg, x, y, z, ry, sw, shh) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d'); c.fillStyle = bg; c.fillRect(0, 0, w, h); c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle'; lines.forEach((l, i) => { c.font = `bold ${l[1]}px sans-serif`; c.fillText(l[0], w / 2, h * (i + .5) / lines.length + 2); }); const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }); const pl = new THREE.Mesh(new THREE.PlaneGeometry(sw, shh), mat); pl.position.set(x, y, z); pl.rotation.y = ry; scene.add(pl); signs.push(mat); return pl; }
 const signs = [];
+const procK0 = Object.fromEntries(Object.entries(kit).map(([k, v]) => [k, v.list.length])), procS0 = scene.children.length;
 /* --- Landmark: Tokyu Kabukicho Tower (tapered slender tower + fountain-like crown fins) --- */
 (LMK[3] || []).forEach(info => { const xs = info.pts.map(p => p[0]), zs = info.pts.map(p => p[1]); const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...zs) - Math.min(...zs);
   const pod = extrude(info.pts, 24, C('#d6dde6'), C('#c4ccd6')); const pm = new THREE.Mesh(pod, bldMat); pm.castShadow = pm.receiveShadow = true; scene.add(pm);
@@ -188,7 +190,7 @@ const signs = [];
   const topY = 24 + (H - 34), sT = base * (1 - segs * .055);
   for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2; put('crownFin', GEO.rbox, neon, M(info.cx + Math.cos(a) * sT * .42, topY + 6, info.cz + Math.sin(a) * sT * .42, 1, 14, 3.2, -a, 0, .32), k % 2 ? '#9fe6ff' : '#e6f6ff'); }
   put('crownCore', GEO.cyl, neon, M(info.cx, topY + 3, info.cz, sT * .5, 6, sT * .5), '#cfefff'); for (let k = 0; k < 3; k++) put('crownRing', GEO.disc, neon, M(info.cx, topY - 4 - k * 9, info.cz, sT * 1.15, .7, sT * 1.15), ['#ff5fd2', '#7fe0ff', '#ffd23d'][k], false); textSign([['東急歌舞伎町タワー', 64]], 640, 96, '#1b1f3a', '#bfe8ff', info.cx, 30, info.cz + base * .62, 0, 22, 3.3);
-  LMK.tower = { x: info.cx, z: info.cz, y: topY + 14 }; });
+  LMK.tower = { x: info.cx, z: info.cz, y: topY + 14, ry: (() => { const pl = D.pois.find(p => p.k === 'plaza'); return pl ? Math.atan2(pl.x - info.cx, pl.z - info.cz) : 0; })() }; });
 const gzLight = new THREE.SpotLight('#cfe4ff', 0, 70, .6, .5, 0);
 /* --- Landmark: Shinjuku Toho Building + stylised Godzilla head on the building edge facing Cinecity --- */
 (LMK[4] || []).forEach(info => { const plaza = D.pois.find(p => p.k === 'plaza') || { x: info.cx - 50, z: info.cz }; let bi = 0, bd = 1e9; info.pts.forEach((p, i) => { const d = Math.hypot(p[0] - plaza.x, p[1] - plaza.z); if (d < bd) { bd = d; bi = i; } });
@@ -204,7 +206,8 @@ const gzLight = new THREE.SpotLight('#cfe4ff', 0, 70, .6, .5, 0);
   [-1.9, 1.9].forEach(u => { P('gzE', GEO.sph, neon, 3.4, u, 10.6, 1.5, 1, 1.5, '#fff27a'); P('gzE', GEO.box, neon, 3.9, u, 11.6, .4, .3, 2.2, '#ff5a2a'); });
   { const [lx, ly, lz] = at(14, 0, 4); gzLight.position.set(lx, ly, lz); const [tx, ty, tz] = at(0, 0, 8); gzLight.target.position.set(tx, ty, tz); scene.add(gzLight, gzLight.target); }
   for (let k = 0; k < 5; k++) P('gzS', GEO.cone, clay, -2.5 - k * 2.2, 0, 12.5 - k * 1.6, 1.4, 4 - k * .4, 3, '#d9d4c4');
-  LMK.godzilla = { x: gx, z: gz, y: gy + 26, face: [sx, sz] }; });
+  LMK.godzilla = { x: gx, z: gz, y: gy + 26, face: [sx, sz], gy, ry: face }; });
+for (const k in kit) kit[k].list.length = Math.min(kit[k].list.length, procK0[k] ?? 0); scene.children.slice(procS0).forEach(o => { scene.remove(o); o.geometry && o.geometry.dispose(); }); // v12: tower + Godzilla now come from the Blender map LODs
 /* --- Don Quijote + PePe + Prince hotel generic signage (text only) --- */
 function facadeSign(info, text, bg, fg, y) { const ei = edgeFacing(info.pts); if (ei < 0) return; const f = edgeFrame(info.pts, ei); const w = Math.min(f.L * .85, 26); textSign([[text, 70]], 1024, 128, bg, fg, f.mx + f.nx * .9, y, f.mz + f.nz * .9, Math.atan2(f.nx, f.nz), w, w / 8); }
 (LMK[5] || []).forEach(info => { facadeSign(info, 'ドン・キホーテ', '#f6d23a', '#d4202c', Math.min(info.hv - 3, 20)); for (let k = 0; k < 6; k++) put('blade', GEO.rbox, neon, M(info.cx + (k - 2.5) * 2.4, info.hv + 2, info.cz, 1.8, 3.4, .6), k % 2 ? '#ffd23d' : '#ff3344'); });
@@ -242,7 +245,9 @@ const kitLen0 = Object.fromEntries(Object.entries(kit).map(([k, v]) => [k, v.lis
 LMK.gate = heroGate(gA, roadDir('歌舞伎町一番街通り', gA), roadW('歌舞伎町一番街通り', gA) / 2 + .8, '歌舞伎町一番街', 'KABUKICHO ICHIBANGAI', '#ff1e2a', '#fbf7ef', '#d0101c', '#ff9a9a', '#fff4f4');
 for (const k in kit) kit[k].list.length = Math.min(kit[k].list.length, kitLen0[k] ?? 0); scene.children.slice(sc0).forEach(o => { scene.remove(o); o.geometry && o.geometry.dispose(); }); // procedural Ichibangai gate replaced by the Blender model below
 let glbDone = false, lastN = 0; const glbEm = [];
+{ const k0 = Object.fromEntries(Object.entries(kit).map(([k, v]) => [k, v.list.length])), s0 = scene.children.length;
 LMK.gate2 = heroGate(gB, roadDir('セントラルロード', gB), roadW('セントラルロード', gB) / 2 + .8, '歌舞伎町セントラルロード', 'KABUKICHO CENTRAL ROAD', '#2a7dff', '#f4f8ff', '#1440a8', '#9fc8ff', '#f0f8ff');
+for (const k in kit) kit[k].list.length = Math.min(kit[k].list.length, k0[k] ?? 0); scene.children.slice(s0).forEach(o => { scene.remove(o); o.geometry && o.geometry.dispose(); }); }
 /* --- Hanazono shrine: torii at the grounds edge nearest 明治通り + hall --- */
 (areasByT[2] || []).forEach(pts => { const meiji = (namedRoads['明治通り'] || []).flat(); let bi = 0, bd = 1e9; pts.forEach((p, i) => meiji.forEach(m => { const d = Math.hypot(p[0] - m[0], p[1] - m[1]); if (d < bd) { bd = d; bi = i; } }));
   let cx = 0, cz = 0; pts.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= pts.length; cz /= pts.length; const [ex, ez] = pts[bi]; const tx = ex + (cx - ex) * .12, tz = ez + (cz - ez) * .12, a = Math.atan2(cx - tx, cz - tz), nx = Math.cos(a), nz = -Math.sin(a);
@@ -314,7 +319,6 @@ function gateStreet(g, len, full, seed, a0 = 6, flank = true) { const rr = mulbe
   for (let s = -2; s <= 2; s++) { const bx = g.x - dx * 3 + nx * s * 6, bz = g.z - dz * 3 + nz * s * 6; if (Math.abs(s) > 0) put('pole', GEO.cyl, clay, M(bx, .5, bz, .35, 1, .35), '#8e9298'); if (full && s % 2 === 0 && s) { put('ped', GEO.cyl, clay, M(bx - dx * 2, 1.1, bz - dz * 2, .75, 2.1, .75), '#2f2f3a'); put('pedH', GEO.sph, clay, M(bx - dx * 2, 2.55, bz - dz * 2, .7, .7, .7), '#f1cfb4'); } }
   put('refl', reflGeo, reflMat, M(g.x + dx * len / 2, 1.24, g.z + dz * len / 2, g.span * .55, 1, len, ang), full ? '#ff6a4a' : '#4ab0ff', false);
 }
-gateStreet(LMK.gate2, 45, false, 23);
 { const gs = atlasQ.map(([x, y, z, w, h, a, i]) => { const q = new THREE.PlaneGeometry(w, h), uv = q.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, (i + .04 + uv.getX(k) * .92) / 8); q.rotateY(a); q.translate(x, y, z); return q; }); if (gs.length) scene.add(new THREE.Mesh(mergeGeometries(gs), atlasMat)); }
 finalizeKit();
 /* ---------- agents (Dijkstra) ---------- */
@@ -358,7 +362,7 @@ const labels = [];
 pois.push({ id: null, k: 'gate', nm: ['セントラルロード ゲート', 'Central Road Gate', 'セントラルロード ゲート', '中央路 拱門', 'ttt'], x: LMK.gate2.x, z: LMK.gate2.z, t: {} });
 pois.forEach((p, i) => { let y = 8; const near = bldInfo.reduce((b, q) => { const d = Math.hypot(q.cx - p.x, q.cz - p.z); return d < b[0] ? [d, q] : b; }, [1e9, null]); if (near[1] && near[0] < 18) y = near[1].hv + 6; if (p.k === 'street' || p.k === 'plaza') y = 6; if (p.k === 'tower' && LMK.tower) { p.x = LMK.tower.x; p.z = LMK.tower.z; y = LMK.tower.y; } if (p.k === 'gate') { p.hero = Math.hypot(p.x - LMK.gate.x, p.z - LMK.gate.z) < 1 ? LMK.gate : LMK.gate2; y = p.hero.H + 9; if (p.hero === LMK.gate2) { p.lx = p.x - p.hero.dx * 18; p.lz = p.z - p.hero.dz * 18; y = 4; } } if (p.k === 'goldengai') y = 14; if (p.k === 'shrine' && p.id === 'way/102792887' && LMK.torii) y = 14;
   p.y = y; p.node = nearNode(p.x, p.z); p.no = String(i + 1).padStart(2, '0');
-  const el = document.createElement('div'); el.className = ['gate', 'tower', 'toho'].includes(p.k) ? 'lb hero' : 'lb'; el.innerHTML = `<i>${p.no}</i><span></span>`; el.onclick = e => { e.stopPropagation(); select(i); };
+  const el = document.createElement('div'); el.className = ['gate', 'tower', 'toho'].includes(p.k) ? 'lb hero' : 'lb'; el.innerHTML = `<i>${p.no}</i><span></span>`; el.onclick = e => { e.stopPropagation(); select(i); }; el.onpointerenter = () => { const k = poiKey(p); if (k) dioLoad(k); };
   const o = new CSS2DObject(el); o.position.set(p.lx ?? p.x, y, p.lz ?? p.z); scene.add(o); labels.push({ el, o, i, mode: '', want: '', cnt: 0, prio: ['tower', 'toho', 'gate', 'goldengai', 'shrine', 'station', 'plaza'].includes(p.k) ? 2 : p.k === 'street' ? 0 : 1 }); });
 function desc(p) { const t = T[lang], L = LI[lang], c = (KCAT[p.k] || KCAT.venue)[L], bits = [];
   if (p.t.height) bits.push(`${t.h} ${p.t.height} m`); if (p.t['building:levels']) bits.push(`${t.lv} ${p.t['building:levels']}`); if (p.t.operator) bits.push(`${t.op} ${p.t.operator}`);
@@ -369,21 +373,25 @@ function desc(p) { const t = T[lang], L = LI[lang], c = (KCAT[p.k] || KCAT.venue
 let sel = -1, fly = null; const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function flyTo(pos, tgt, dur = 1.2) { fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: tgt, k: RM ? .999 : 0, dur }; }
 
-/* --- hero diorama v11: a fully modelled 360° clay diorama of our Imagine concept (blender/diorama.py → assets/kabukicho_diorama.glb).
-   Selecting the Ichibangai gate swaps to its own scene with free orbit; a near-block copy also replaces the OSM blocks at the real gate. --- */
-const DIO = { on: false, ready: false, peds: [] };
-const dScene = new THREE.Scene(), dCam = new THREE.PerspectiveCamera(39, 4 / 3, .5, 1200);
-const dCtl = new OrbitControls(dCam, canvas); dCtl.enabled = false; dCtl.enableDamping = true; dCtl.dampingFactor = .08; dCtl.minDistance = 5; dCtl.maxDistance = 190; dCtl.maxPolarAngle = 1.78; dCtl.screenSpacePanning = false;
-const HERO_T = new V3(0, 2.5 + 22.5 * Math.tan(11 * Math.PI / 180), 0), HERO_P = new V3(0, 2.5, 22.5);
+/* --- v12 dioramas: one fully modelled 360° clay diorama per landmark (blender/diorama.py → assets/dio_<key>.glb, lazy-loaded on open, prefetched on hover)
+   plus small map LODs of every landmark in one shared file (assets/map_lods.glb, loaded at idle after the first render). All sign faces share assets/atlas.webp. --- */
+const DIO = { on: false, ready: false, peds: [], key: null, cache: {}, cfg: null };
+const B2T = (x, y, z) => new V3(x, z, -y); // Blender → three
+const DCFG = { ichiban: { p: B2T(0, -22.5, 2.5), t: B2T(0, 0, 6.87), lens: 38, R: 190, walk: [-42, 52], street: 1, sh: 70 },
+  central: { p: B2T(0, -22.5, 2.5), t: B2T(0, 0, 6.87), lens: 38, R: 190, walk: [-42, 52], street: 1, sh: 70 },
+  tokyu: { p: B2T(0, -150, 3), t: B2T(0, 0, 74), lens: 30, R: 330, sh: 120 }, toho: { p: B2T(0, -92, 2.5), t: B2T(0, 0, 30), lens: 30, R: 200, sh: 90 },
+  plaza: { p: B2T(0, -52, 22), t: B2T(0, 8, 4), lens: 30, R: 160, sh: 80 }, goldengai: { p: B2T(0, -7, 1.8), t: B2T(0, 30, 3.2), lens: 30, R: 110, sh: 60 },
+  hanazono: { p: B2T(0, -17, 2.6), t: B2T(0, 20, 6), lens: 30, R: 140, sh: 70 } };
+const dScene = new THREE.Scene(), dCam = new THREE.PerspectiveCamera(39, 4 / 3, .5, 1600);
+const dCtl = new OrbitControls(dCam, canvas); dCtl.enabled = false; dCtl.enableDamping = true; dCtl.dampingFactor = .08; dCtl.minDistance = 3; dCtl.maxDistance = 190; dCtl.maxPolarAngle = 1.78; dCtl.screenSpacePanning = false;
 const dSkyU = { uNight: U.night };
-dScene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, uniforms: dSkyU,
+dScene.add(new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, uniforms: dSkyU,
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
   fragmentShader: 'uniform float uNight; varying vec3 vD; float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719))) * 43758.5453); } void main(){ float t = smoothstep(-.02, .42, vD.y);' +
     'vec3 day = mix(vec3(.93,.62,.55), vec3(.38,.27,.49), t), nig = mix(vec3(.10,.10,.24), vec3(.03,.03,.11), t); vec3 c = mix(day, nig, smoothstep(.25,.75,uNight));' +
     'vec3 q = floor(vD * 260.); float st = step(.9975, h(q)) * smoothstep(.05,.3,vD.y) * smoothstep(.4,.9,uNight); gl_FragColor = vec4(c + st * .9, 1.); }' })));
 const dHemi = new THREE.HemisphereLight('#ffd9e2', '#7a5a66', 1.5), dSun = new THREE.DirectionalLight('#ffd6b8', 2.4), dRed = new THREE.PointLight('#ff3a30', 0, 30, 1.6);
-dSun.position.set(-34, 105, 62); dSun.target.position.set(0, 0, -15); dSun.castShadow = true; Object.assign(dSun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 260 });
-dSun.shadow.mapSize.set(2048, 2048); dSun.shadow.bias = -.0004; dSun.shadow.normalBias = .04; dRed.position.set(0, 8.5, 3);
+dSun.castShadow = true; dSun.shadow.mapSize.set(2048, 2048); dSun.shadow.bias = -.0004; dSun.shadow.normalBias = .04; dRed.position.set(0, 8.5, 3);
 dScene.add(dHemi, dSun, dSun.target, dRed);
 const dLamps = [-1, 1].map(sx => { const l = new THREE.PointLight('#ffc77a', 0, 26, 1.4); l.position.set(sx * 5.2, 4.3, -14); dScene.add(l); return l; });
 const dRefl = new Reflector(new THREE.PlaneGeometry(9.2, 190), { textureWidth: 512, textureHeight: 512, color: 0x000000 });
@@ -396,28 +404,51 @@ function claify(m, amp) { m.onBeforeCompile = sh => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GRAIN_GLSL).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ vec3 p = vGW * 3.1; vec3 g = vec3(gn(p), gn(p + 17.3), gn(p + 41.7)) + .5 * vec3(gn(p * 3.3), gn(p * 3.3 + 9.1), gn(p * 3.3 + 23.)); normal = normalize(normal + (g - .75) * ' + amp.toFixed(3) + '); }'); };
   m.customProgramCacheKey = () => 'clay' + amp; }
 const hullMat = new THREE.MeshBasicMaterial({ color: '#1c1222', side: THREE.BackSide }); hullMat.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(objectNormal) * .055;'); }; hullMat.customProgramCacheKey = () => 'hull';
-const EMK2 = { shopGlass: [.15, 1.3], bulb: [.45, 2.1], lantern: [.3, 1.9], window: [.1, 1.25], gateRed: [.03, .55], signFace: [.3, .7] };
-const HULL = /^(gateRed|post|signBody|signBack|bld|ledge|awn|cloth|skin|hair|legs|lampPost|cloud|curb)/;
-function dioMats(root) { root.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; const m = o.material, n = m.name;
-    if (EMK2[n]) { m.userData.em = EMK2[n]; if (!glbEm.includes(m)) glbEm.push(m); if (n === 'bulb' || n === 'lantern') m.toneMapped = false; if (n !== 'gateRed') o.castShadow = false; if (n === 'signFace') { m.emissiveMap = m.map; m.emissive.set('#ffffff'); signs.push(m); } }
-    else if (!m.userData.clay) { m.userData.clay = 1; claify(m, /^(post|curb|walk)/.test(n) ? .5 : /^(road|base)/.test(n) ? .28 : .2); if (n === 'road') { m.roughness = .55; } }
-    if (n === 'cloud') o.castShadow = false;
-    if (HULL.test(n) && !o.isInstancedMesh && !o.userData.hull) { o.userData.hull = 1; const h = new THREE.Mesh(o.geometry, hullMat); h.userData.hull = 1; h.castShadow = h.receiveShadow = false; h.raycast = () => {}; o.add(h); } }); }
-function dioHero() { const A = innerWidth / innerHeight, tv = Math.max(Math.tan(19.56 * Math.PI / 180), Math.tan(25.35 * Math.PI / 180) / A); dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.aspect = A; dCam.updateProjectionMatrix(); dCam.position.copy(HERO_P); dCtl.target.copy(HERO_T); dCtl.update(); }
-{ const ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
-  ld.load('assets/kabukicho_diorama.glb', gl => { const root = gl.scene; dioMats(root); dScene.add(root); DIO.root = root;
-    const mr = root.clone(); ['FAR', 'GROUND', 'CLOUDS'].forEach(k => { const o = mr.getObjectByName(k); if (o) o.visible = false; }); const fo = mr.getObjectByName('INST_FAR'); if (fo) fo.visible = false;
-    mr.position.set(GF.x, 0, GF.z); mr.rotation.y = GF.ry; mr.scale.setScalar(GF.s); scene.add(mr); LMK.gateGLB = mr;
-    [root, mr].forEach(r => { const pg = r.getObjectByName('PEDS'); if (pg) pg.children.forEach((p, k) => DIO.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (k % 5) * .12, ph: k * 1.7 })); });
-    glbEm.forEach(m => m.emissiveIntensity = m.userData.em[0] + lastN * m.userData.em[1]); DIO.ready = true; glbDone = true; }, undefined, e => { console.error('diorama glb', e); glbDone = true; }); }
-function dioPeds() { const t = U.time.value; DIO.peds.forEach(p => { const L = 52, z0 = -42; let z = p.z + p.dir * p.sp * t; z = z0 + (((z - z0) % L) + L) % L; p.o.position.z = z; p.o.position.y = p.y + Math.abs(Math.sin(t * 7 * p.sp + p.ph)) * .06; p.o.quaternion.copy(p.q); p.o.rotateZ(Math.sin(t * 7 * p.sp + p.ph) * .05); }); }
-function dioFrame(dt) { if (dCam.position.y < .8) dCam.position.y = .8; const n = U.night.value; dCtl.update(); dHemi.intensity = 1.5 - n * 1.15; dHemi.color.set(n > .5 ? '#8a90d8' : '#ffd9e2'); dSun.intensity = 2.4 * (1 - n * .93); dRed.intensity = n * 22; dLamps.forEach(l => l.intensity = n * 25);
-  dRefl.visible = n > .05; dRefl.material.uniforms.color.value.setScalar(.5 * n * .5);
+const EMK2 = { shopGlass: [.15, 1.3], bulb: [.45, 2.1], lantern: [.3, 1.9], lanternRed: [.3, 1.9], window: [.1, 1.25], gateRed: [.03, .55], signFace: [.3, .7], towerGlass: [.05, 1.5], gzEye: [.4, 1.6], signLight: [.3, 1.4], water: [.05, .4], gateBlue: [.05, .8] };
+const HULL = /^(gateRed|gateBlue|post|signBody|signBack|bld|ledge|awn|cloth|skin|hair|legs|lampPost|cloud|curb|toho|gz|shack|torii|hall|rib|podium|planter|trunk|leaf|stoneL|fount)/;
+let atlasW = null; const getAtlas = () => { if (!atlasW) { atlasW = new THREE.TextureLoader().load('assets/atlas.webp'); atlasW.flipY = false; atlasW.colorSpace = THREE.SRGBColorSpace; atlasW.anisotropy = 4; } return atlasW; }; // one shared sign atlas for every GLB, fetched with the first one
+const shared = {}; // one material instance per name across all GLBs (fewer programs, shared atlas)
+function f32(g) { const o = new THREE.BufferGeometry(); for (const n of ['position', 'normal', 'uv']) { const a = g.attributes[n]; if (!a) continue; const k = a.itemSize, arr = new Float32Array(a.count * k); const G = ['getX', 'getY', 'getZ', 'getW']; for (let i = 0; i < a.count; i++) for (let j = 0; j < k; j++) arr[i * k + j] = a[G[j]](i); o.setAttribute(n, new THREE.BufferAttribute(arr, k)); } if (g.index) o.setIndex(Array.from(g.index.array)); else o.setIndex(null); return o; }
+/* merge every static (non-instanced, non-pedestrian) mesh per material: cuts draw calls (and the per-mesh hull passes) to one per material */
+function mergeStatic(root) { root.updateMatrixWorld(true); const inv = root.matrixWorld.clone().invert(), groups = new Map(), kill = [];
+  root.traverse(o => { if (!o.isMesh || o.isInstancedMesh || o.userData.hull) return; let q = o, ped = false; while (q) { if (/^PEDS/.test(q.name)) ped = true; q = q.parent; } if (ped) return;
+    const key = o.material.uuid + '|' + ['normal', 'uv'].filter(n => o.geometry.attributes[n]).join(','), g = f32(o.geometry); if (!g.index) { const n = g.attributes.position.count; g.setIndex(Array.from({ length: n }, (_, i) => i)); }
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); let grp = root; for (let q = o; q && q.parent; q = q.parent) if (q.parent === root) { grp = q; break; } (groups.get(key) || groups.set(key, { m: o.material, gs: [] }).get(key)).gs.push([g, grp]); kill.push(o); });
+  kill.forEach(o => o.parent.remove(o));
+  groups.forEach(({ m, gs }) => { const byGrp = new Map(); gs.forEach(([g, grp]) => { (byGrp.get(grp) || byGrp.set(grp, []).get(grp)).push(g); });
+    byGrp.forEach((list, grp) => { const mg = mergeGeometries(list); if (!mg) return; const me = new THREE.Mesh(mg, m); me.name = 'm_' + m.name; if (grp === root) root.add(me); else { grp.updateMatrixWorld(true); me.applyMatrix4(grp.matrixWorld.clone().invert().multiply(root.matrixWorld)); grp.add(me); } }); }); }
+function dioMats(root, hull = true) { mergeStatic(root); root.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; let m = o.material; const n = m.name;
+    if (shared[n]) { o.material = m = shared[n]; } else { shared[n] = m;
+      if (EMK2[n]) { m.userData.em = EMK2[n]; glbEm.push(m); m.emissiveIntensity = m.userData.em[0] + lastN * m.userData.em[1]; if (n === 'bulb' || /^lantern/.test(n)) m.toneMapped = false; if (n === 'signFace') { m.map = m.emissiveMap = getAtlas(); m.emissive.set('#ffffff'); m.needsUpdate = true; signs.push(m); } }
+      else if (!m.userData.clay) { m.userData.clay = 1; claify(m, /^(post|curb|walk)/.test(n) ? .5 : /^(road|base)/.test(n) ? .28 : .2); if (n === 'road') m.roughness = .55; } }
+    if (EMK2[n] && n !== 'gateRed' && n !== 'towerGlass') o.castShadow = false; if (n === 'cloud') o.castShadow = false;
+    if (hull && HULL.test(n) && !o.isInstancedMesh && !o.userData.hull) { o.userData.hull = 1; const h = new THREE.Mesh(o.geometry, hullMat); h.userData.hull = 1; h.castShadow = h.receiveShadow = false; h.raycast = () => {}; o.add(h); } }); }
+const gltfL = new GLTFLoader(); gltfL.setMeshoptDecoder(MeshoptDecoder);
+function loadGLB(url, prog) { return new Promise((ok, no) => gltfL.load(url, ok, e => prog && e.total && prog(e.loaded / e.total), no)); }
+function dioLoad(key) { const c = DIO.cache; if (!c[key]) c[key] = loadGLB('assets/dio_' + key + '.glb', f => { if (DIO.key === key) dioProg(f); }).then(gl => { const r = gl.scene; dioMats(r); r.userData.peds = []; const pg = r.getObjectByName('PEDS');
+    if (pg) pg.children.forEach((p, k) => r.userData.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (k % 5) * .12, ph: k * 1.7 })); return r; }).catch(e => { console.error('diorama glb ' + key, e); c[key] = null; return null; });
+  return c[key]; }
+function dioProg(f) { const b = $('#dioL'); if (!b) return; b.hidden = f >= 1; b.firstChild.style.width = Math.round(f * 100) + '%'; }
+function poiKey(p) { if (!p) return null; if (p.hero === LMK.gate) return 'ichiban'; if (p.hero === LMK.gate2) return 'central'; if (p.k === 'tower') return 'tokyu'; if (p.k === 'toho') return 'toho'; if (p.k === 'plaza') return 'plaza'; if (p.k === 'goldengai') return 'goldengai'; if (p.k === 'shrine' && p.id === 'way/102792887') return 'hanazono'; return null; }
+/* map LODs (one file, placed at the real landmarks; they replace the procedural/OSM blocks) */
+const LODPOS = { ichiban: () => GF, central: () => GF2, tokyu: () => LMK.tower && { x: LMK.tower.x, z: LMK.tower.z, ry: LMK.tower.ry, s: 1 }, toho: () => { const g = LMK.godzilla; return g && { x: g.x - 15.5 * g.face[0], z: g.z - 15.5 * g.face[1], y: g.gy - 28.2, ry: g.ry, s: 1 }; } };
+let lodDone = false;
+function loadLods() { loadGLB('assets/map_lods.glb').then(gl => { const all = gl.scene; dioMats(all, false); Object.entries(LODPOS).forEach(([k, f]) => { const o = all.getObjectByName('L_' + k), F = f(); if (!o || !F) return; o.position.set(F.x, F.y || 0, F.z); o.rotation.set(0, F.ry, 0); o.scale.setScalar(F.s); scene.add(o); LMK['lod_' + k] = o;
+      const pg = o.children.find(c => /^PEDS/.test(c.name)); if (pg) pg.children.forEach((p, j) => DIO.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (j % 5) * .12, ph: j * 1.7, walk: [-42, 52] })); });
+    lodDone = true; glbDone = true; }).catch(e => { console.error('map lods', e); glbDone = true; }); }
+function dioPedsUpd(list, walk) { const t = U.time.value; list.forEach(p => { const W = p.walk || walk; if (W) { const [z0, L] = W; let z = p.z + p.dir * p.sp * t; z = z0 + (((z - z0) % L) + L) % L; p.o.position.z = z; } p.o.position.y = p.y + Math.abs(Math.sin(t * 7 * p.sp + p.ph)) * .06; p.o.quaternion.copy(p.q); p.o.rotateZ(Math.sin(t * 7 * p.sp + p.ph) * .05); }); }
+function dioPeds() { dioPedsUpd(DIO.peds); if (DIO.on && DIO.root) dioPedsUpd(DIO.root.userData.peds, DIO.cfg.walk); }
+function dioHero() { const c = DIO.cfg || DCFG.ichiban, A = innerWidth / innerHeight, tv = Math.max(13.5 / c.lens, 18 / c.lens / A); dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.aspect = A; dCam.updateProjectionMatrix(); dCam.position.copy(c.p); dCtl.target.copy(c.t); dCtl.maxDistance = c.R; { const d = c.p.clone().sub(c.t); dCtl.maxPolarAngle = Math.max(1.78, Math.acos(d.y / d.length()) + .03); } dCtl.update(); }
+function dioFrame(dt) { if (dCam.position.y < .8) dCam.position.y = .8; const n = U.night.value, st = DIO.cfg.street; dCtl.update(); dHemi.intensity = 1.5 - n * 1.15; dHemi.color.set(n > .5 ? '#8a90d8' : '#ffd9e2'); dSun.intensity = 2.4 * (1 - n * .93); dRed.intensity = st ? n * 22 : 0; dLamps.forEach(l => l.intensity = st ? n * 25 : 0);
+  dRefl.visible = st && n > .05; dRefl.material.uniforms.color.value.setScalar(.5 * n * .5);
   const rp = composer.passes[0]; rp.scene = dScene; rp.camera = dCam; bloom.strength = bloomBase * .75; composer.render(); rp.scene = scene; rp.camera = camera; }
-function dioEnter(p) { DIO.on = true; dioHero(); dCtl.enabled = true; controls.enabled = false; document.body.classList.add('dio'); $('#dioN').textContent = nmOf(p.nm); $('#dioBar').hidden = false; }
-function dioExit() { if (!DIO.on) return; DIO.on = false; dCtl.enabled = false; controls.enabled = true; document.body.classList.remove('dio'); $('#dioBar').hidden = true; }
-addEventListener('resize', () => { if (DIO.on) { const A = innerWidth / innerHeight, tv = Math.max(Math.tan(19.56 * Math.PI / 180), Math.tan(25.35 * Math.PI / 180) / A); dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.aspect = A; dCam.updateProjectionMatrix(); } });
-function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = !(p.hero === LMK.gate); } if (p.hero === LMK.gate) dioEnter(p); else dioExit();
+function dioShow(key, r) { if (DIO.root) dScene.remove(DIO.root); DIO.root = r; dScene.add(r); const c = DIO.cfg, S = c.sh; dSun.position.set(-34 * S / 70, 105 * S / 70, 62 * S / 70).add(c.t).setY(105 * S / 70); dSun.target.position.copy(c.t).setY(0);
+  Object.assign(dSun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: S * 4 }); dSun.shadow.camera.updateProjectionMatrix(); DIO.ready = true; dioProg(1); }
+function dioEnter(p) { const key = poiKey(p) || 'ichiban'; DIO.on = true; DIO.key = key; DIO.cfg = DCFG[key]; DIO.ready = false; dioHero(); dCtl.enabled = true; controls.enabled = false; document.body.classList.add('dio'); $('#dioN').textContent = nmOf(p.nm); $('#dioBar').hidden = false; dioProg(0);
+  dioLoad(key).then(r => { if (DIO.key === key && DIO.on && r) dioShow(key, r); else if (!r) dioExit(); }); }
+function dioExit() { if (!DIO.on) return; DIO.on = false; DIO.key = null; dCtl.enabled = false; controls.enabled = true; document.body.classList.remove('dio'); $('#dioBar').hidden = true; dioProg(1); }
+addEventListener('resize', () => { if (DIO.on) { const c = DIO.cfg, A = innerWidth / innerHeight, tv = Math.max(13.5 / c.lens, 18 / c.lens / A); dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.aspect = A; dCam.updateProjectionMatrix(); } });
+function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = true; } if (poiKey(p)) dioEnter(p); else dioExit();
   const a = $('#cL'); if (p.id) { a.style.display = ''; a.href = 'https://www.openstreetmap.org/' + p.id; a.textContent = T[lang].osm; } else a.style.display = 'none';
   labels.forEach(l => l.el.classList.toggle('sel', l.i === i)); document.querySelectorAll('.it').forEach(e => e.classList.toggle('sel', +e.dataset.i === i));
   const v = bestView(poiSpec(p)); flyTo(v[0], v[1], 1.4);
@@ -522,10 +553,11 @@ function frame() { const dt = Math.min(clock.getDelta(), .1); renderer.info.rese
   const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z); if (Math.abs(az - lastAz) > .002) { lastAz = az; $('#needle').style.transform = `rotate(${az}rad)`; }
   if (++fc % 6 === 0) drawMini(); }
 $('#load').style.display = 'none'; renderer.setAnimationLoop(frame);
+requestAnimationFrame(() => requestAnimationFrame(() => (window.requestIdleCallback || setTimeout)(loadLods, { timeout: 400 }))); // map LODs after the first frame
 /* click a gate in 3D → hero view */
 { const rc = new THREE.Raycaster(), pk = ['gatePost', 'gateTube', 'gateBox', 'gateTrim', 'gateFoot'].map(k => kit[k] && kit[k].im).filter(Boolean); let down = null;
   canvas.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; const r = canvas.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera); const h = rc.intersectObjects(pk, false)[0]; if (!h) return; let bi = -1, bd = 1e9; pois.forEach((p, i) => { if (!p.hero) return; const d = Math.hypot(p.hero.x - h.point.x, p.hero.z - h.point.z); if (d < bd) { bd = d; bi = i; } }); if (bi >= 0 && bd < 30) select(bi); }); }
-if (TEST) window.__kb = { get ready() { return glbDone; }, dio: on => on ? dioEnter(pois[sel] || pois[0]) : dioExit(), dioReady: () => DIO.ready, dioView: (az, pol, r) => { dCam.position.setFromSphericalCoords(r, pol, az).add(dCtl.target); dCtl.update(); }, dioHero: () => dioHero(), dcam: () => [dCam.position.toArray(), dCtl.target.toArray(), dCam.fov, DIO.root && DIO.root.position.toArray(), DIO.root && DIO.root.scale.toArray()], dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
+if (TEST) window.__kb = { LMK, get ready() { return glbDone && (!DIO.on || DIO.ready); }, dio: on => on ? dioEnter(pois[sel] || pois[0]) : dioExit(), dioReady: () => DIO.ready, dioView: (az, pol, r) => { dCam.position.setFromSphericalCoords(r, pol, az).add(dCtl.target); dCtl.update(); }, dioHero: () => dioHero(), lmkInfo: () => { const ext = pts => { const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]); return [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)].map(v => +v.toFixed(1)); }; return { k3: (LMK[3] || []).map(i => [ext(i.pts), i.hv, i.pts]), k4: (LMK[4] || []).map(i => [ext(i.pts), i.hv, i.pts]), k7: (LMK[7] || []).length, k7e: ext((LMK[7] || []).flatMap(i => i.pts)), shrine: (areasByT[2] || []).map(ext), pois: D.pois.filter(p => /plaza|tower|toho|goldengai|shrine/.test(p.k)).map(p => [p.k, p.nm, +p.x.toFixed(1), +p.z.toFixed(1)]), gate2: LMK.gate2 && [LMK.gate2.x, LMK.gate2.z, LMK.gate2.dir, LMK.gate2.span], GF }; }, dcam: () => [dCam.position.toArray(), dCtl.target.toArray(), dCam.fov, DIO.root && DIO.root.position.toArray(), DIO.root && DIO.root.scale.toArray()], dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
 }
 main().catch(fail);
