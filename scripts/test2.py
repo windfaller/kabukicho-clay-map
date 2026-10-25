@@ -19,6 +19,7 @@ with sync_playwright() as p:
       if a.startswith('route='): x,y=a[6:].split(','); extra+=' ROUTE: '+pg.evaluate(f'__kb.route(__kb.poi({x!r}),__kb.poi({y!r}))'); pg.wait_for_timeout(3000)
       if a.startswith('view='): pg.evaluate(f'__kb.view({a[5:]})'); pg.wait_for_timeout(3500)
       if a=='gclick': x,y=pg.evaluate('__kb.gxy()'); pg.mouse.click(x,y); pg.wait_for_timeout(1500); pg.evaluate('__kb.fin()'); pg.wait_for_timeout(2500)
+      if a.startswith('js='): pg.evaluate(a[3:]); pg.wait_for_timeout(1500)
       if a.startswith('key='): pg.keyboard.press(a[4:]); pg.wait_for_timeout(2500)
     pg.wait_for_timeout(2500)
     if 'stab' in acts:
