@@ -7,6 +7,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 const $ = s => document.querySelector(s), V3 = THREE.Vector3, C = c => new THREE.Color(c);
 const fail = err => { console.error(err); const l = $('#load'); if (l) { l.style.display = 'flex'; l.innerHTML = '<div>初始化失敗 / Init failed / 初期化に失敗</div><pre>' + String(err && err.stack || err).replace(/</g, '&lt;') + '</pre>'; } };
 /* ---------- i18n ---------- */
@@ -230,7 +232,17 @@ function heroGate(p, dir, half, text, sub, frameCol, bg, fg, glow, bulbCol) { //
   return { x: gx, z: gz, dir, dx: p[2], dz: p[3], span, H, SY, SW, SH }; }
 function roadW(name, p) { let w = 10, bd = 1e9; (namedRoads[name] || []).forEach(q => q.forEach(v => { const d = Math.hypot(v[0] - p[0], v[1] - p[1]); if (d < bd) { bd = d; w = q.w; } })); return w; }
 const gA = inward(gate, '歌舞伎町一番街通り', 10), gB = inward(gate2, 'セントラルロード', 10);
+const kitLen0 = Object.fromEntries(Object.entries(kit).map(([k, v]) => [k, v.list.length])), sc0 = scene.children.length;
 LMK.gate = heroGate(gA, roadDir('歌舞伎町一番街通り', gA), roadW('歌舞伎町一番街通り', gA) / 2 + .8, '歌舞伎町一番街', 'KABUKICHO ICHIBANGAI', '#ff1e2a', '#fbf7ef', '#d0101c', '#ff9a9a', '#fff4f4');
+for (const k in kit) kit[k].list.length = Math.min(kit[k].list.length, kitLen0[k] ?? 0); scene.children.slice(sc0).forEach(o => { scene.remove(o); o.geometry && o.geometry.dispose(); }); // procedural Ichibangai gate replaced by the Blender model below
+let glbDone = false, lastN = 0; const glbEm = [];
+{ const g = LMK.gate, fs = Math.sign(Math.sin(g.dir) * g.dx + Math.cos(g.dir) * g.dz) || 1, ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
+  const EMK = { bulb: [.6, 2.2], lantern: [.25, 2.4], window: [.12, 1.6], gateRed: [.15, 3.2] };
+  ld.load('assets/ichibangai_gate.glb', gl => { const root = gl.scene; root.position.set(g.x, 0, g.z); root.rotation.y = g.dir + (fs > 0 ? Math.PI : 0); root.scale.setScalar(g.span / 11.6);
+    root.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; const m = o.material, n = m.name;
+      if (n === 'signFace' || n === 'atlas') { const b = new THREE.MeshBasicMaterial({ map: m.map, toneMapped: false, side: n === 'atlas' ? THREE.DoubleSide : THREE.FrontSide }); signs.push(b); o.material = b; o.castShadow = false; m.dispose(); }
+      else if (EMK[n]) { m.userData.em = EMK[n]; glbEm.push(m); m.toneMapped = n !== 'bulb' && n !== 'lantern'; if (n !== 'gateRed') o.castShadow = false; } });
+    scene.add(root); LMK.gateGLB = root; glbEm.forEach(m => m.emissiveIntensity = m.userData.em[0] + lastN * m.userData.em[1]); glbDone = true; }, undefined, e => { console.error('gate glb', e); glbDone = true; }); }
 LMK.gate2 = heroGate(gB, roadDir('セントラルロード', gB), roadW('セントラルロード', gB) / 2 + .8, '歌舞伎町セントラルロード', 'KABUKICHO CENTRAL ROAD', '#2a7dff', '#f4f8ff', '#1440a8', '#9fc8ff', '#f0f8ff');
 /* --- Hanazono shrine: torii at the grounds edge nearest 明治通り + hall --- */
 (areasByT[2] || []).forEach(pts => { const meiji = (namedRoads['明治通り'] || []).flat(); let bi = 0, bd = 1e9; pts.forEach((p, i) => meiji.forEach(m => { const d = Math.hypot(p[0] - m[0], p[1] - m[1]); if (d < bd) { bd = d; bi = i; } }));
@@ -288,9 +300,9 @@ coreSamples.forEach((p, k) => { if (k % 3) return; const [x, z, , a, w] = p, nx 
 const atlasTex = new THREE.TextureLoader().load(window.SIGN_ATLAS || ''); atlasTex.colorSpace = THREE.SRGBColorSpace; atlasTex.anisotropy = 4;
 const atlasMat = new THREE.MeshBasicMaterial({ map: atlasTex, toneMapped: false, side: THREE.DoubleSide }); signs.push(atlasMat); const atlasQ = [];
 const SHOPC = ['#c8402f', '#2f6c8f', '#e7a83c', '#7a4a9a', '#e06a2a', '#e07aa0', '#5b8a4a', '#3aa0b0'];
-function gateStreet(g, len, full, seed) { const rr = mulberry32(seed), fs = Math.sign(Math.sin(g.dir) * (g.dx || 0) + Math.cos(g.dir) * (g.dz || 0)) || 1, dx = Math.sin(g.dir) * fs, dz = Math.cos(g.dir) * fs, nx = Math.cos(g.dir), nz = -Math.sin(g.dir), ang = Math.atan2(dx, dz), hw = g.span / 2;
+function gateStreet(g, len, full, seed, a0 = 6, flank = true) { const rr = mulberry32(seed), fs = Math.sign(Math.sin(g.dir) * (g.dx || 0) + Math.cos(g.dir) * (g.dz || 0)) || 1, dx = Math.sin(g.dir) * fs, dz = Math.cos(g.dir) * fs, nx = Math.cos(g.dir), nz = -Math.sin(g.dir), ang = Math.atan2(dx, dz), hw = g.span / 2;
   const P = (along, side, off) => [g.x + dx * along + nx * side * off, g.z + dz * along + nz * side * off];
-  [-1, 1].forEach(sd => { let k = 0; for (let a = 6; a < len; a += full ? 7 : 11, k++) { const [fx0, fz0] = P(a, sd, hw - .5), ci = Math.floor(rr() * 8), fa = ang + (sd > 0 ? -Math.PI / 2 : Math.PI / 2);
+  [-1, 1].forEach(sd => { let k = 0; for (let a = a0; a < len; a += full ? 7 : 11, k++) { const [fx0, fz0] = P(a, sd, hw - .5), ci = Math.floor(rr() * 8), fa = ang + (sd > 0 ? -Math.PI / 2 : Math.PI / 2);
       put('shopF', GEO.box, neonSoft, M(fx0, 1.6, fz0, 5.6, 3.2, .3, ang + Math.PI / 2), ['#ffe6b8', '#ffd2a0', '#fff0d8'][k % 3], false); // lit shop window
       put('awning', GEO.rbox, clay, M(fx0 - nx * sd * .8, 3.4, fz0 - nz * sd * .8, 6, .35, 1.9, ang + Math.PI / 2, 0, -sd * .18), SHOPC[ci], false);
       put('band', GEO.rbox, neon, M(fx0 + nx * sd * .1, 4.5, fz0 + nz * sd * .1, 5.2, 1.1, .35, ang + Math.PI / 2), SHOPC[(ci + 3) % 8], false);
@@ -298,12 +310,12 @@ function gateStreet(g, len, full, seed) { const rr = mulberry32(seed), fs = Math
       if (k % 2 === 0) { const [lx, lz] = P(a + 3.5, sd, hw - 2.2); put('pole', GEO.cyl, clay, M(lx, 2.3, lz, .22, 4.6, .22), '#4a4448'); put('lamp', GEO.sph, neon, M(lx, 4.7, lz, .8, .9, .8), '#ffe2a8', false); }
       if (rr() < (full ? .9 : .5)) { const [px, pz] = P(a + rr() * 4, sd, hw - 2.6 - rr() * 1.2); put('ped', GEO.cyl, clay, M(px, 1.1, pz, .75, 2.1, .75), ['#e2583e', '#3b6ea8', '#f0c24a', '#5a9a62', '#8c5ab8', '#f2f2f2'][k % 6]); put('pedH', GEO.sph, clay, M(px, 2.55, pz, .7, .7, .7), '#f1cfb4'); } } });
   // signs flanking the gate on the corner facades, facing Yasukuni-dori (as in the concept)
-  [-1, 1].forEach(sd => (full ? [[2.2, 6, 0], [5, 13, 1], [8.5, 8, 0], [11.5, 15, 1]] : [[2.4, 7, 0], [6.5, 11, 1]]).forEach(([o, y, b], j) => { const [x, z] = P(full ? 1.2 : 1.5, sd, hw + o), w = 2.3, h = b ? 6.5 : 5; atlasQ.push([x - dx * .15, y, z - dz * .15, w, h, ang + Math.PI, (seed + j * 3 + (sd > 0 ? 5 : 0)) % 8]); put('stackF', GEO.box, clay, M(x + dx * .05, y, z + dz * .05, w + .3, h + .3, .2, ang), '#2a2430'); }));
+  if (flank) [-1, 1].forEach(sd => (full ? [[2.2, 6, 0], [5, 13, 1], [8.5, 8, 0], [11.5, 15, 1]] : [[2.4, 7, 0], [6.5, 11, 1]]).forEach(([o, y, b], j) => { const [x, z] = P(full ? 1.2 : 1.5, sd, hw + o), w = 2.3, h = b ? 6.5 : 5; atlasQ.push([x - dx * .15, y, z - dz * .15, w, h, ang + Math.PI, (seed + j * 3 + (sd > 0 ? 5 : 0)) % 8]); put('stackF', GEO.box, clay, M(x + dx * .05, y, z + dz * .05, w + .3, h + .3, .2, ang), '#2a2430'); }));
   // Yasukuni-dori sidewalk side, outside the gate
   for (let s = -2; s <= 2; s++) { const bx = g.x - dx * 3 + nx * s * 6, bz = g.z - dz * 3 + nz * s * 6; if (Math.abs(s) > 0) put('pole', GEO.cyl, clay, M(bx, .5, bz, .35, 1, .35), '#8e9298'); if (full && s % 2 === 0 && s) { put('ped', GEO.cyl, clay, M(bx - dx * 2, 1.1, bz - dz * 2, .75, 2.1, .75), '#2f2f3a'); put('pedH', GEO.sph, clay, M(bx - dx * 2, 2.55, bz - dz * 2, .7, .7, .7), '#f1cfb4'); } }
   put('refl', reflGeo, reflMat, M(g.x + dx * len / 2, 1.24, g.z + dz * len / 2, g.span * .55, 1, len, ang), full ? '#ff6a4a' : '#4ab0ff', false);
 }
-gateStreet(LMK.gate, 70, true, 11); gateStreet(LMK.gate2, 45, false, 23);
+gateStreet(LMK.gate, 70, true, 11, 37, false); gateStreet(LMK.gate2, 45, false, 23);
 { const gs = atlasQ.map(([x, y, z, w, h, a, i]) => { const q = new THREE.PlaneGeometry(w, h), uv = q.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, (i + .04 + uv.getX(k) * .92) / 8); q.rotateY(a); q.translate(x, y, z); return q; }); if (gs.length) scene.add(new THREE.Mesh(mergeGeometries(gs), atlasMat)); }
 finalizeKit();
 /* ---------- agents (Dijkstra) ---------- */
@@ -335,7 +347,7 @@ const KF = [[0, '#0a1030', '#1c2550', '#7d8cff', .35, '#5a6aa8', '#1e1c30', .35,
 let lastSunQ = -1;
 function applyTime(min) { min = ((min % 1440) + 1440) % 1440; let i = 0; while (KF[i + 1][0] <= min) i++; const a = KF[i], b = KF[i + 1], f = (min - a[0]) / (b[0] - a[0]); const lc = k => a[k].clone().lerp(b[k], f), ln = k => a[k] + (b[k] - a[k]) * f;
   skyU.top.value.copy(lc(1)); skyU.hor.value.copy(lc(2)); scene.fog.color.copy(skyU.hor.value); sun.color.copy(lc(3)); sun.intensity = ln(4); hemi.color.copy(lc(5)); hemi.groundColor.copy(lc(6)); hemi.intensity = ln(7);
-  const n = ln(8); U.night.value = n; reflMat.opacity = n * .55; renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
+  const n = ln(8); lastN = n; glbEm.forEach(m => m.emissiveIntensity = m.userData.em[0] + n * m.userData.em[1]); U.night.value = n; reflMat.opacity = n * .55; renderer.toneMappingExposure = ln(9); bloomBase = .08 + n * .3; bloom.threshold = .92 - n * .1;
   const qm = Math.floor(min / 15); if (qm !== lastSunQ) { lastSunQ = qm; const m = qm * 15, day = Math.min(1, Math.max(0, (m - 330) / 840)), az = Math.PI * (.2 + .6 * day), el = n > .5 ? .95 : .4 + Math.sin(day * Math.PI) * .65; sun.position.set(Math.cos(az) * Math.cos(el) * 800, Math.sin(el) * 800, Math.sin(az) * Math.cos(el) * 400 + 300); sun.updateMatrixWorld(); } // quantised sun → no shadow crawl
   signs.forEach(s => s.color.setScalar(.8 + n * .15)); gzLight.intensity = n * 9;
   $('#clock').textContent = String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(Math.floor(min % 60)).padStart(2, '0'); }
@@ -465,6 +477,6 @@ $('#load').style.display = 'none'; renderer.setAnimationLoop(frame);
 { const rc = new THREE.Raycaster(), pk = ['gatePost', 'gateTube', 'gateBox', 'gateTrim', 'gateFoot'].map(k => kit[k] && kit[k].im).filter(Boolean); let down = null;
   canvas.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; const r = canvas.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera); const h = rc.intersectObjects(pk, false)[0]; if (!h) return; let bi = -1, bd = 1e9; pois.forEach((p, i) => { if (!p.hero) return; const d = Math.hypot(p.hero.x - h.point.x, p.hero.z - h.point.z); if (d < bd) { bd = d; bi = i; } }); if (bi >= 0 && bd < 30) select(bi); }); }
-if (TEST) window.__kb = { ready: true, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
+if (TEST) window.__kb = { get ready() { return glbDone; }, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
 }
 main().catch(fail);
