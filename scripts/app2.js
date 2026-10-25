@@ -9,6 +9,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 const $ = s => document.querySelector(s), V3 = THREE.Vector3, C = c => new THREE.Color(c);
 const fail = err => { console.error(err); const l = $('#load'); if (l) { l.style.display = 'flex'; l.innerHTML = '<div>初始化失敗 / Init failed / 初期化に失敗</div><pre>' + String(err && err.stack || err).replace(/</g, '&lt;') + '</pre>'; } };
 /* ---------- i18n ---------- */
@@ -140,11 +141,16 @@ const roadPts = []; O.r.forEach(([cls, , seq]) => { if (cls <= 3) seq.forEach(i 
 function edgeFacing(pts) { let best = -1, bl = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; let dmin = 1e9; for (let k = 0; k < roadPts.length; k += 3) { const d = (roadPts[k][0] - mx) ** 2 + (roadPts[k][1] - mz) ** 2; if (d < dmin) dmin = d; } const sc = L / (1 + Math.sqrt(dmin) * .15); if (sc > bl && L > 2.5) { bl = sc; best = i; } } return best; }
 function edgeFrame(pts, i) { const a = pts[i], b = pts[(i + 1) % pts.length]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; if (inPoly(mx + nx * .8, mz + nz * .8, pts)) { nx = -nx; nz = -nz; } return { a, b, L, nx, nz, mx, mz, ang: Math.atan2(b[0] - a[0], b[1] - a[1]) }; }
 function extrude(pts, h, col, top) { const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))); const g = new THREE.ExtrudeGeometry(sh, { depth: Math.max(.5, h - .6), bevelEnabled: true, bevelThickness: .6, bevelSize: .6, bevelOffset: -.6, bevelSegments: 1, curveSegments: 1 }); g.rotateX(-Math.PI / 2); g.deleteAttribute('uv'); const n = g.attributes.position.count, ca = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const c = g.attributes.position.getY(i) > h - .1 ? top : col; ca[i * 3] = c.r; ca[i * 3 + 1] = c.g; ca[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); return g; }
+/* v11: the Blender clay diorama replaces the OSM blocks around the Ichibangai gate; frame = same placement as the GLB below */
+const GF = (() => { const p = inward(D.meta.gate, '歌舞伎町一番街通り', 10), dir = roadDir('歌舞伎町一番街通り', p), half = roadW('歌舞伎町一番街通り', p) / 2 + .8, fs = Math.sign(Math.sin(dir) * p[2] + Math.cos(dir) * p[3]) || 1; return { x: p[0], z: p[1], ry: dir + (fs > 0 ? Math.PI : 0), s: half * 2 / 11.6 }; })();
+const DIO_RECTS = [[-43, 43, -2.5, 12.5], [-23, 23, 10, 42], [-31, 31, 12, 26.5]]; // Blender x/y footprints of the exported near buildings
+function inDio(wx, wz) { const dx = wx - GF.x, dz = wz - GF.z, c = Math.cos(GF.ry), sn = Math.sin(GF.ry), lx = (dx * c - dz * sn) / GF.s, ly = -(dx * sn + dz * c) / GF.s; return DIO_RECTS.some(([x0, x1, y0, y1]) => lx > x0 && lx < x1 && ly > y0 && ly < y1); }
 const hotel = D.pois.find(p => p.id === 'node/475090904'), pepe = D.pois.find(p => p.id === 'node/4919950721');
 O.b.forEach(([h, kind, ni, pts], bi) => {
   const r = mulberry32(bi * 7919 + 13); let hv = Math.max(3, hComp(h));
   let cx = 0, cz = 0; pts.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= pts.length; cz /= pts.length;
   if (hotel && inPoly(hotel.x, hotel.z, pts)) kind = 8; if (pepe && inPoly(pepe.x, pepe.z, pts)) kind = 9;
+  if (kind < 2 && inDio(cx, cz)) return;
   const info = { cx, cz, hv, pts, kind }; bldInfo.push(info); if (kind >= 3) (LMK[kind] ||= []).push(info);
   if (kind === 3) return; // Tokyu Kabukicho Tower: custom model below
   const core = cx > -240 && cx < 230 && cz > -220 && cz < 110;
@@ -236,13 +242,6 @@ const kitLen0 = Object.fromEntries(Object.entries(kit).map(([k, v]) => [k, v.lis
 LMK.gate = heroGate(gA, roadDir('歌舞伎町一番街通り', gA), roadW('歌舞伎町一番街通り', gA) / 2 + .8, '歌舞伎町一番街', 'KABUKICHO ICHIBANGAI', '#ff1e2a', '#fbf7ef', '#d0101c', '#ff9a9a', '#fff4f4');
 for (const k in kit) kit[k].list.length = Math.min(kit[k].list.length, kitLen0[k] ?? 0); scene.children.slice(sc0).forEach(o => { scene.remove(o); o.geometry && o.geometry.dispose(); }); // procedural Ichibangai gate replaced by the Blender model below
 let glbDone = false, lastN = 0; const glbEm = [];
-{ const g = LMK.gate, fs = Math.sign(Math.sin(g.dir) * g.dx + Math.cos(g.dir) * g.dz) || 1, ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
-  const EMK = { bulb: [.6, 2.2], lantern: [.25, 2.4], window: [.12, 1.6], gateRed: [.15, 3.2] };
-  ld.load('assets/ichibangai_gate.glb', gl => { const root = gl.scene; root.position.set(g.x, 0, g.z); root.rotation.y = g.dir + (fs > 0 ? Math.PI : 0); root.scale.setScalar(g.span / 11.6);
-    root.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; const m = o.material, n = m.name;
-      if (n === 'signFace' || n === 'atlas') { const b = new THREE.MeshBasicMaterial({ map: m.map, toneMapped: false, side: n === 'atlas' ? THREE.DoubleSide : THREE.FrontSide }); signs.push(b); o.material = b; o.castShadow = false; m.dispose(); }
-      else if (EMK[n]) { m.userData.em = EMK[n]; glbEm.push(m); m.toneMapped = n !== 'bulb' && n !== 'lantern'; if (n !== 'gateRed') o.castShadow = false; } });
-    scene.add(root); LMK.gateGLB = root; glbEm.forEach(m => m.emissiveIntensity = m.userData.em[0] + lastN * m.userData.em[1]); glbDone = true; }, undefined, e => { console.error('gate glb', e); glbDone = true; }); }
 LMK.gate2 = heroGate(gB, roadDir('セントラルロード', gB), roadW('セントラルロード', gB) / 2 + .8, '歌舞伎町セントラルロード', 'KABUKICHO CENTRAL ROAD', '#2a7dff', '#f4f8ff', '#1440a8', '#9fc8ff', '#f0f8ff');
 /* --- Hanazono shrine: torii at the grounds edge nearest 明治通り + hall --- */
 (areasByT[2] || []).forEach(pts => { const meiji = (namedRoads['明治通り'] || []).flat(); let bi = 0, bd = 1e9; pts.forEach((p, i) => meiji.forEach(m => { const d = Math.hypot(p[0] - m[0], p[1] - m[1]); if (d < bd) { bd = d; bi = i; } }));
@@ -315,7 +314,7 @@ function gateStreet(g, len, full, seed, a0 = 6, flank = true) { const rr = mulbe
   for (let s = -2; s <= 2; s++) { const bx = g.x - dx * 3 + nx * s * 6, bz = g.z - dz * 3 + nz * s * 6; if (Math.abs(s) > 0) put('pole', GEO.cyl, clay, M(bx, .5, bz, .35, 1, .35), '#8e9298'); if (full && s % 2 === 0 && s) { put('ped', GEO.cyl, clay, M(bx - dx * 2, 1.1, bz - dz * 2, .75, 2.1, .75), '#2f2f3a'); put('pedH', GEO.sph, clay, M(bx - dx * 2, 2.55, bz - dz * 2, .7, .7, .7), '#f1cfb4'); } }
   put('refl', reflGeo, reflMat, M(g.x + dx * len / 2, 1.24, g.z + dz * len / 2, g.span * .55, 1, len, ang), full ? '#ff6a4a' : '#4ab0ff', false);
 }
-gateStreet(LMK.gate, 70, true, 11, 37, false); gateStreet(LMK.gate2, 45, false, 23);
+gateStreet(LMK.gate2, 45, false, 23);
 { const gs = atlasQ.map(([x, y, z, w, h, a, i]) => { const q = new THREE.PlaneGeometry(w, h), uv = q.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, (i + .04 + uv.getX(k) * .92) / 8); q.rotateY(a); q.translate(x, y, z); return q; }); if (gs.length) scene.add(new THREE.Mesh(mergeGeometries(gs), atlasMat)); }
 finalizeKit();
 /* ---------- agents (Dijkstra) ---------- */
@@ -370,38 +369,54 @@ function desc(p) { const t = T[lang], L = LI[lang], c = (KCAT[p.k] || KCAT.venue
 let sel = -1, fly = null; const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function flyTo(pos, tgt, dur = 1.2) { fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: tgt, k: RM ? .999 : 0, dur }; }
 
-/* --- hero diorama: our Imagine clay concept turned into a 2.5D scene (concept painting projected onto a depth-displaced mesh; depth from Depth Anything V2) --- */
-const DIO = { on: false, ready: false, yaw: 0, pitch: 0, dist: 1, ty: 0, tp: 0, td: 1, drag: null };
-const dScene = new THREE.Scene(); dScene.background = C('#241c34'); const dCam = new THREE.PerspectiveCamera(40, 4 / 3, .5, 600);
-const dU = { tDay: { value: null }, tNight: { value: null }, uNight: U.night };
-function dioBuild() { if (DIO.mesh || DIO.loading) return; DIO.loading = true; const tl = new THREE.TextureLoader(); let n = 0; const done = () => { if (++n < 3) return; DIO.ready = true; };
-  ['day', 'night'].forEach(k => tl.load(`assets/hero_${k}.webp`, tx => { tx.colorSpace = THREE.NoColorSpace; tx.anisotropy = 4; dU[k === 'day' ? 'tDay' : 'tNight'].value = tx; done(); }, undefined, e => console.error('hero tex', e)));
-  const im = new Image(); im.onload = () => { const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height; const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0); const px = cx.getImageData(0, 0, im.width, im.height).data;
-    const W = im.width, H = im.height, Dp = new Float32Array(W * H); for (let i = 0; i < W * H; i++) Dp[i] = px[i * 4] / 255;
-    const minF = (src, r) => { const t = new Float32Array(W * H), o = new Float32Array(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let m = 1; for (let k = -r; k <= r; k++) m = Math.min(m, src[y * W + Math.min(W - 1, Math.max(0, x + k))]); t[y * W + x] = m; }
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let m = 1; for (let k = -r; k <= r; k++) m = Math.min(m, t[Math.min(H - 1, Math.max(0, y + k)) * W + x]); o[y * W + x] = m; } return o; };
-    const blur = (src, r) => { let a = src; for (const ax of [0, 1]) { const o = new Float32Array(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let t = 0; for (let k = -r; k <= r; k++) { const xx = ax ? x : Math.min(W - 1, Math.max(0, x + k)), yy = ax ? Math.min(H - 1, Math.max(0, y + k)) : y; t += a[yy * W + xx]; } o[y * W + x] = t / (2 * r + 1); } a = o; } return a; };
-    const Db = blur(minF(Dp, 12), 10), GX = 216, GY = 162, tv = Math.tan(20 * Math.PI / 180), th = tv * 4 / 3;
-    const mk = (D, cut) => { const g = new THREE.PlaneGeometry(1, 1, GX, GY), P = g.attributes.position, UV = g.attributes.uv, E = new Float32Array(P.count);
-      const at = (u, v) => D[Math.min(H - 1, Math.max(0, Math.round((1 - v) * (H - 1)))) * W + Math.min(W - 1, Math.max(0, Math.round(u * (W - 1))))];
-      for (let i = 0; i < P.count; i++) { const u = UV.getX(i), v = UV.getY(i), d = at(u, v), z = 1 / (.0415 * d + .00584); P.setXYZ(i, (2 * u - 1) * th * z, (2 * v - 1) * tv * z, -z);
-        if (cut) { let j = 0; for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) j = Math.max(j, Math.abs(at(u + du / GX, v + dv / GY) - d)); E[i] = j > .06 ? 1 : 0; } }
-      g.setAttribute('edge', new THREE.BufferAttribute(E, 1)); g.computeBoundingSphere(); return g; };
-    const mat = cut => new THREE.ShaderMaterial({ uniforms: dU, vertexShader: 'attribute float edge; varying float vE; varying vec2 vUv; void main(){ vUv = uv; vE = edge; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-      fragmentShader: 'uniform sampler2D tDay, tNight; uniform float uNight; varying vec2 vUv; varying float vE; void main(){ ' + (cut ? 'if (vE > .02) discard; ' : '') + 'gl_FragColor = vec4(mix(texture2D(tDay, vUv).rgb, texture2D(tNight, vUv).rgb, smoothstep(.3, .75, uNight)), 1.); }' });
-    const back = new THREE.Mesh(mk(Db, false), mat(false)); back.renderOrder = 0; dScene.add(back);
-    DIO.mesh = new THREE.Mesh(mk(Dp, true), mat(true)); DIO.mesh.renderOrder = 1;
-    dScene.add(DIO.mesh); done(); }; im.onerror = e => console.error('hero depth', e); im.src = 'assets/hero_depth.png'; }
-function dioCam(dt) { const k = Math.min(1, dt * 6); DIO.yaw += (DIO.ty - DIO.yaw) * k; DIO.pitch += (DIO.tp - DIO.pitch) * k; DIO.dist += (DIO.td - DIO.dist) * k;
-  const sway = FREEZE || !playing ? 0 : Math.sin(U.time.value * .25) * .012, A = innerWidth / innerHeight, tv0 = Math.tan(20 * Math.PI / 180), z0 = 1.06, tv = (A > 4 / 3 || A < 1) ? tv0 * 4 / 3 / z0 / A : tv0 / z0, R = 22.5 * DIO.dist, y = DIO.yaw + sway;
-  dCam.aspect = A; dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.updateProjectionMatrix();
-  dCam.position.set(Math.sin(y) * R, Math.sin(DIO.pitch) * R, -22.5 + Math.cos(y) * Math.cos(DIO.pitch) * R); dCam.lookAt(0, 0, -22.5); }
-function dioEnter(p) { dioBuild(); DIO.on = true; DIO.yaw = DIO.ty = DIO.pitch = DIO.tp = 0; DIO.dist = DIO.td = 1; document.body.classList.add('dio'); $('#dioN').textContent = nmOf(p.nm); $('#dioBar').hidden = false; }
-function dioExit() { if (!DIO.on) return; DIO.on = false; document.body.classList.remove('dio'); $('#dioBar').hidden = true; }
-renderer.domElement.addEventListener('pointerdown', e => { if (DIO.on) DIO.drag = [e.clientX, e.clientY, DIO.ty, DIO.tp]; });
-addEventListener('pointermove', e => { if (DIO.on && DIO.drag) { DIO.ty = Math.max(-.08, Math.min(.08, DIO.drag[2] - (e.clientX - DIO.drag[0]) / innerWidth * .3)); DIO.tp = Math.max(-.02, Math.min(.05, DIO.drag[3] + (e.clientY - DIO.drag[1]) / innerHeight * .2)); } });
-addEventListener('pointerup', () => { DIO.drag = null; });
-renderer.domElement.addEventListener('wheel', e => { if (DIO.on) { DIO.td = Math.max(.86, Math.min(1.03, DIO.td * (1 + Math.sign(e.deltaY) * .05))); } }, { passive: true });
+/* --- hero diorama v11: a fully modelled 360° clay diorama of our Imagine concept (blender/diorama.py → assets/kabukicho_diorama.glb).
+   Selecting the Ichibangai gate swaps to its own scene with free orbit; a near-block copy also replaces the OSM blocks at the real gate. --- */
+const DIO = { on: false, ready: false, peds: [] };
+const dScene = new THREE.Scene(), dCam = new THREE.PerspectiveCamera(39, 4 / 3, .5, 1200);
+const dCtl = new OrbitControls(dCam, canvas); dCtl.enabled = false; dCtl.enableDamping = true; dCtl.dampingFactor = .08; dCtl.minDistance = 5; dCtl.maxDistance = 190; dCtl.maxPolarAngle = 1.78; dCtl.screenSpacePanning = false;
+const HERO_T = new V3(0, 2.5 + 22.5 * Math.tan(11 * Math.PI / 180), 0), HERO_P = new V3(0, 2.5, 22.5);
+const dSkyU = { uNight: U.night };
+dScene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, uniforms: dSkyU,
+  vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: 'uniform float uNight; varying vec3 vD; float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719))) * 43758.5453); } void main(){ float t = smoothstep(-.02, .42, vD.y);' +
+    'vec3 day = mix(vec3(.93,.62,.55), vec3(.38,.27,.49), t), nig = mix(vec3(.10,.10,.24), vec3(.03,.03,.11), t); vec3 c = mix(day, nig, smoothstep(.25,.75,uNight));' +
+    'vec3 q = floor(vD * 260.); float st = step(.9975, h(q)) * smoothstep(.05,.3,vD.y) * smoothstep(.4,.9,uNight); gl_FragColor = vec4(c + st * .9, 1.); }' })));
+const dHemi = new THREE.HemisphereLight('#ffd9e2', '#7a5a66', 1.5), dSun = new THREE.DirectionalLight('#ffd6b8', 2.4), dRed = new THREE.PointLight('#ff3a30', 0, 30, 1.6);
+dSun.position.set(-34, 105, 62); dSun.target.position.set(0, 0, -15); dSun.castShadow = true; Object.assign(dSun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 260 });
+dSun.shadow.mapSize.set(2048, 2048); dSun.shadow.bias = -.0004; dSun.shadow.normalBias = .04; dRed.position.set(0, 8.5, 3);
+dScene.add(dHemi, dSun, dSun.target, dRed);
+const dLamps = [-1, 1].map(sx => { const l = new THREE.PointLight('#ffc77a', 0, 26, 1.4); l.position.set(sx * 5.2, 4.3, -14); dScene.add(l); return l; });
+const dRefl = new Reflector(new THREE.PlaneGeometry(9.2, 190), { textureWidth: 512, textureHeight: 512, color: 0x000000 });
+dRefl.rotation.x = -Math.PI / 2; dRefl.position.set(0, .085, -68); dRefl.material.transparent = true; dRefl.material.blending = THREE.AdditiveBlending; dRefl.material.depthWrite = false; dRefl.visible = false; dScene.add(dRefl);
+/* clay grain (fingerprint-ish world-space value noise on the normal) + dark inverted-hull seams */
+const GRAIN_GLSL = 'varying vec3 vGW; float gh(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); } float gn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);' +
+  'return mix(mix(mix(gh(i),gh(i+vec3(1,0,0)),f.x),mix(gh(i+vec3(0,1,0)),gh(i+vec3(1,1,0)),f.x),f.y),mix(mix(gh(i+vec3(0,0,1)),gh(i+vec3(1,0,1)),f.x),mix(gh(i+vec3(0,1,1)),gh(i+vec3(1,1,1)),f.x),f.y),f.z); }';
+function claify(m, amp) { m.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGW;').replace('#include <project_vertex>', '#include <project_vertex>\n{ vec4 gw = vec4(transformed, 1.);\n#ifdef USE_INSTANCING\n gw = instanceMatrix * gw;\n#endif\n vGW = (modelMatrix * gw).xyz; }');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GRAIN_GLSL).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ vec3 p = vGW * 3.1; vec3 g = vec3(gn(p), gn(p + 17.3), gn(p + 41.7)) + .5 * vec3(gn(p * 3.3), gn(p * 3.3 + 9.1), gn(p * 3.3 + 23.)); normal = normalize(normal + (g - .75) * ' + amp.toFixed(3) + '); }'); };
+  m.customProgramCacheKey = () => 'clay' + amp; }
+const hullMat = new THREE.MeshBasicMaterial({ color: '#1c1222', side: THREE.BackSide }); hullMat.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(objectNormal) * .055;'); }; hullMat.customProgramCacheKey = () => 'hull';
+const EMK2 = { shopGlass: [.15, 1.3], bulb: [.45, 2.1], lantern: [.3, 1.9], window: [.1, 1.25], gateRed: [.03, .55], signFace: [.3, .7] };
+const HULL = /^(gateRed|post|signBody|signBack|bld|ledge|awn|cloth|skin|hair|legs|lampPost|cloud|curb)/;
+function dioMats(root) { root.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; const m = o.material, n = m.name;
+    if (EMK2[n]) { m.userData.em = EMK2[n]; if (!glbEm.includes(m)) glbEm.push(m); if (n === 'bulb' || n === 'lantern') m.toneMapped = false; if (n !== 'gateRed') o.castShadow = false; if (n === 'signFace') { m.emissiveMap = m.map; m.emissive.set('#ffffff'); signs.push(m); } }
+    else if (!m.userData.clay) { m.userData.clay = 1; claify(m, /^(post|curb|walk)/.test(n) ? .5 : /^(road|base)/.test(n) ? .28 : .2); if (n === 'road') { m.roughness = .55; } }
+    if (n === 'cloud') o.castShadow = false;
+    if (HULL.test(n) && !o.isInstancedMesh && !o.userData.hull) { o.userData.hull = 1; const h = new THREE.Mesh(o.geometry, hullMat); h.userData.hull = 1; h.castShadow = h.receiveShadow = false; h.raycast = () => {}; o.add(h); } }); }
+function dioHero() { const A = innerWidth / innerHeight, tv = Math.max(Math.tan(19.56 * Math.PI / 180), Math.tan(25.35 * Math.PI / 180) / A); dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.aspect = A; dCam.updateProjectionMatrix(); dCam.position.copy(HERO_P); dCtl.target.copy(HERO_T); dCtl.update(); }
+{ const ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
+  ld.load('assets/kabukicho_diorama.glb', gl => { const root = gl.scene; dioMats(root); dScene.add(root); DIO.root = root;
+    const mr = root.clone(); ['FAR', 'GROUND', 'CLOUDS'].forEach(k => { const o = mr.getObjectByName(k); if (o) o.visible = false; }); const fo = mr.getObjectByName('INST_FAR'); if (fo) fo.visible = false;
+    mr.position.set(GF.x, 0, GF.z); mr.rotation.y = GF.ry; mr.scale.setScalar(GF.s); scene.add(mr); LMK.gateGLB = mr;
+    [root, mr].forEach(r => { const pg = r.getObjectByName('PEDS'); if (pg) pg.children.forEach((p, k) => DIO.peds.push({ o: p, x: p.position.x, y: p.position.y, z: p.position.z, q: p.quaternion.clone(), dir: new V3(0, 0, 1).applyQuaternion(p.quaternion).z < 0 ? -1 : 1, sp: .9 + (k % 5) * .12, ph: k * 1.7 })); });
+    glbEm.forEach(m => m.emissiveIntensity = m.userData.em[0] + lastN * m.userData.em[1]); DIO.ready = true; glbDone = true; }, undefined, e => { console.error('diorama glb', e); glbDone = true; }); }
+function dioPeds() { const t = U.time.value; DIO.peds.forEach(p => { const L = 52, z0 = -42; let z = p.z + p.dir * p.sp * t; z = z0 + (((z - z0) % L) + L) % L; p.o.position.z = z; p.o.position.y = p.y + Math.abs(Math.sin(t * 7 * p.sp + p.ph)) * .06; p.o.quaternion.copy(p.q); p.o.rotateZ(Math.sin(t * 7 * p.sp + p.ph) * .05); }); }
+function dioFrame(dt) { if (dCam.position.y < .8) dCam.position.y = .8; const n = U.night.value; dCtl.update(); dHemi.intensity = 1.5 - n * 1.15; dHemi.color.set(n > .5 ? '#8a90d8' : '#ffd9e2'); dSun.intensity = 2.4 * (1 - n * .93); dRed.intensity = n * 22; dLamps.forEach(l => l.intensity = n * 25);
+  dRefl.visible = n > .05; dRefl.material.uniforms.color.value.setScalar(.5 * n * .5);
+  const rp = composer.passes[0]; rp.scene = dScene; rp.camera = dCam; bloom.strength = bloomBase * .75; composer.render(); rp.scene = scene; rp.camera = camera; }
+function dioEnter(p) { DIO.on = true; dioHero(); dCtl.enabled = true; controls.enabled = false; document.body.classList.add('dio'); $('#dioN').textContent = nmOf(p.nm); $('#dioBar').hidden = false; }
+function dioExit() { if (!DIO.on) return; DIO.on = false; dCtl.enabled = false; controls.enabled = true; document.body.classList.remove('dio'); $('#dioBar').hidden = true; }
+addEventListener('resize', () => { if (DIO.on) { const A = innerWidth / innerHeight, tv = Math.max(Math.tan(19.56 * Math.PI / 180), Math.tan(25.35 * Math.PI / 180) / A); dCam.fov = 2 * Math.atan(tv) * 180 / Math.PI; dCam.aspect = A; dCam.updateProjectionMatrix(); } });
 function select(i) { sel = i; const p = pois[i], d = desc(p); $('#card').classList.add('on'); $('#cN').textContent = nmOf(p.nm); const alt = [p.nm[0], p.nm[1], p.nm[2], p.nm[3]].filter((v, k, a) => v && v !== nmOf(p.nm) && a.indexOf(v) === k); $('#cE').textContent = alt.join(' / '); $('#cC').textContent = d.cat; $('#cD').textContent = [d.facts, d.tags].filter(Boolean).join(lang === 'en' ? '. ' : '。'); $('#cNote').textContent = d.notes; { const im = $('#cImg'); im.hidden = !(p.hero === LMK.gate); } if (p.hero === LMK.gate) dioEnter(p); else dioExit();
   const a = $('#cL'); if (p.id) { a.style.display = ''; a.href = 'https://www.openstreetmap.org/' + p.id; a.textContent = T[lang].osm; } else a.style.display = 'none';
   labels.forEach(l => l.el.classList.toggle('sel', l.i === i)); document.querySelectorAll('.it').forEach(e => e.classList.toggle('sel', +e.dataset.i === i));
@@ -502,7 +517,7 @@ function frame() { const dt = Math.min(clock.getDelta(), .1); renderer.info.rese
   if (!FREEZE) { stepAgents(dt); U.time.value += dt; if (++ledF % 4 === 0) drawLED(U.time.value); }
   keyNav(dt);
   if (fly) { fly.k = Math.min(1, fly.k + dt / fly.dur); const e = 1 - Math.pow(1 - fly.k, 3); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e); if (fly.k >= 1) fly = null; }
-  if (DIO.on && DIO.ready) { dioCam(dt); renderer.render(dScene, dCam); lr.domElement.style.visibility = 'hidden'; } else { lr.domElement.style.visibility = '';
+  dioPeds(); if (DIO.on && DIO.ready) { dioFrame(dt); lr.domElement.style.visibility = 'hidden'; } else { lr.domElement.style.visibility = '';
   controls.update(); bloom.strength = bloomBase * Math.min(1, Math.max(.35, camera.position.distanceTo(controls.target) / 380)); composer.render(); lr.render(scene, camera); layoutLabels(); }
   const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z); if (Math.abs(az - lastAz) > .002) { lastAz = az; $('#needle').style.transform = `rotate(${az}rad)`; }
   if (++fc % 6 === 0) drawMini(); }
@@ -511,6 +526,6 @@ $('#load').style.display = 'none'; renderer.setAnimationLoop(frame);
 { const rc = new THREE.Raycaster(), pk = ['gatePost', 'gateTube', 'gateBox', 'gateTrim', 'gateFoot'].map(k => kit[k] && kit[k].im).filter(Boolean); let down = null;
   canvas.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; const r = canvas.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera); const h = rc.intersectObjects(pk, false)[0]; if (!h) return; let bi = -1, bd = 1e9; pois.forEach((p, i) => { if (!p.hero) return; const d = Math.hypot(p.hero.x - h.point.x, p.hero.z - h.point.z); if (d < bd) { bd = d; bi = i; } }); if (bi >= 0 && bd < 30) select(bi); }); }
-if (TEST) window.__kb = { get ready() { return glbDone; }, dio: on => on ? dioEnter(pois[sel] || pois[0]) : dioExit(), dioReady: () => DIO.ready, dioView: (y, p, d) => { DIO.yaw = DIO.ty = y; DIO.pitch = DIO.tp = p; DIO.dist = DIO.td = d; }, dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
+if (TEST) window.__kb = { get ready() { return glbDone; }, dio: on => on ? dioEnter(pois[sel] || pois[0]) : dioExit(), dioReady: () => DIO.ready, dioView: (az, pol, r) => { dCam.position.setFromSphericalCoords(r, pol, az).add(dCtl.target); dCtl.update(); }, dioHero: () => dioHero(), dcam: () => [dCam.position.toArray(), dCtl.target.toArray(), dCam.fov, DIO.root && DIO.root.position.toArray(), DIO.root && DIO.root.scale.toArray()], dc: () => renderer.info.render.calls, stats: { ...D.meta.stats, pois: pois.length, walkers: NW, cars: NC }, select, route: (a, b) => { routeBetween(a, b); return $('#rRes').textContent; }, view: i => { view(i); fly.k = .999; }, fin: () => { if (fly) fly.k = .999; }, gxy: () => { const v = new V3(LMK.gate.x, LMK.gate.SY, LMK.gate.z).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, gates: () => [LMK.gate, LMK.gate2].map(g => [g.x, g.z, g.dir, g.span].map(v => +v.toFixed(1))), setCam: (p, t) => { camera.position.set(...p); controls.target.set(...t); controls.update(); }, cam: () => [camera.position.toArray().map(v => +v.toFixed(1)), controls.target.toArray().map(v => +v.toFixed(1))], poi: n => pois.findIndex(p => p.nm.includes(n) || (p.id || '').endsWith('/' + n)) };
 }
 main().catch(fail);
