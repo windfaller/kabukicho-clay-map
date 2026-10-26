@@ -96,7 +96,13 @@ bldMat.onBeforeCompile = s => {
   }`);
 };
 bldMat.customProgramCacheKey = () => 'bld'; addClay(bldMat);
-const neon = neonMat(), neonSoft = neonMat(.1, 1.6);
+const neon = neonMat(), neonSoft = neonMat(.1, 1.6); /* v36: rooftop billboards carry lettered faces (8-row canvas atlas, row picked per instance from its position; panel colour = instance neon colour, dark clay lettering + frame) instead of blank pastel cards */
+const billMat = (() => { const cv = document.createElement('canvas'); cv.width = 512; cv.height = 1280; const c = cv.getContext('2d'), W = ['カラオケ', 'ラーメン', 'ホテル', 'BAR', '居酒屋', 'パチンコ', 'ゲーム', '焼肉'], F = '"Hiragino Kaku Gothic ProN","Noto Sans CJK JP","Yu Gothic",sans-serif';
+  c.fillStyle = '#ffffff'; c.fillRect(0, 0, 512, 1280); W.forEach((w, i) => { const y0 = i * 160; c.strokeStyle = '#3a2a30'; c.lineWidth = 9; c.strokeRect(14, y0 + 14, 484, 132); c.fillStyle = '#2a1820'; let fs = 104; c.font = `900 ${fs}px ${F}`; const tw = c.measureText(w).width; if (tw > 440) { fs = Math.floor(fs * 440 / tw); c.font = `900 ${fs}px ${F}`; } c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(w, 256, y0 + 84); });
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; const m = new THREE.MeshStandardMaterial({ roughness: .5, map: t });
+  m.onBeforeCompile = sh => { sh.uniforms.uNight = U.night; sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_INSTANCING\n { float bi = floor(fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453) * 8.); vMapUv = vec2(vMapUv.x, (vMapUv.y + 7. - bi) / 8.); }\n#endif');
+    sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance += vColor * texture2D(map, vMapUv).rgb * (.15 + uNight * 1.8);\n#endif'); };
+  m.customProgramCacheKey = () => 'bill8'; return m; })();
 /* ---------- instanced kit ---------- */
 const kit = {};
 const GEO = { box: new THREE.BoxGeometry(1, 1, 1), rbox: new RoundedBoxGeometry(1, 1, 1, 2, .18), sph: new THREE.SphereGeometry(.5, 12, 8), cyl: new THREE.CylinderGeometry(.5, .5, 1, 10), cone: new THREE.ConeGeometry(.5, 1, 9), pyr: new THREE.ConeGeometry(.5, 1, 4), disc: new THREE.CylinderGeometry(.5, .5, 1, 14) };
@@ -311,7 +317,7 @@ bldInfo.forEach(info => { if (info.kind >= 3 || info.kind === 7 || info.hv < 8 |
   for (let c = 0; c < cols; c++) { const t = (c + .5) / cols, px = f.a[0] + (f.b[0] - f.a[0]) * t + f.nx * 1.6, pz = f.a[1] + (f.b[1] - f.a[1]) * t + f.nz * 1.6; if ([LMK.gate, LMK.gate2].some(g => g && Math.hypot(g.x - px, g.z - pz) < 48)) continue; let y = 4.6; const top = Math.min(info.hv - 1, 34);
     while (y < top - 2) { const h = 3.5 + r2() * 3; if (y + h > top) break; put('stack', GEO.box, neon, M(px, y + h / 2, pz, 1, h, 3.4, f.ang + Math.PI / 2), NEON[Math.floor(r2() * NEON.length)]); put('stackF', GEO.box, clay, M(px - f.nx * .2, y + h / 2, pz - f.nz * .2, .6, h + .3, 3.8, f.ang + Math.PI / 2), '#3a3238'); y += h + .5; } }
   if (!ng && info.hv > 12 && r2() < .55) { const w = Math.min(f.L * .7, 16), bx = info.cx + f.nx * 2, bz = info.cz + f.nz * 2; [-1, 1].forEach(s => put('pole', GEO.cyl, clay, M(bx + Math.cos(f.ang) * w * .4 * s, info.hv + 2, bz - Math.sin(f.ang) * w * .4 * s, .35, 4, .35), '#4a4448'));
-    put('roofbill', GEO.box, neon, M(bx, info.hv + 6, bz, w, 4.5, .6, f.ang + Math.PI), NEON[Math.floor(r2() * NEON.length)]); put('roofbillF', GEO.box, clay, M(bx - f.nx * .35, info.hv + 6, bz - f.nz * .35, w + .6, 5.1, .4, f.ang + Math.PI), '#1e1a22'); }
+    put('roofbill', GEO.box, billMat, M(bx, info.hv + 6, bz, w, 4.5, .6, f.ang + Math.PI), NEON[Math.floor(r2() * NEON.length)]); put('roofbillF', GEO.box, clay, M(bx - f.nx * .35, info.hv + 6, bz - f.nz * .35, w + .6, 5.1, .4, f.ang + Math.PI), '#1e1a22'); }
   if (info.hv > 22 && ledTargets.length < 6 && r2() < .5) ledTargets.push({ info, f }); });
 const ledCv = document.createElement('canvas'); ledCv.width = 256; ledCv.height = 144; const ledC = ledCv.getContext('2d'), ledTex = new THREE.CanvasTexture(ledCv); ledTex.colorSpace = THREE.SRGBColorSpace;
 const ledMat = new THREE.MeshBasicMaterial({ map: ledTex, toneMapped: false }); signs.push(ledMat);
