@@ -80,6 +80,7 @@ bldMat.onBeforeCompile = s => {
   s.uniforms.uNight = U.night;
   s.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + s.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normalize(mat3(modelMatrix)*objectNormal);');
   s.fragmentShader = 'uniform float uNight; varying vec3 vWP; varying vec3 vWN;\nfloat hsh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\nfloat pulse(float a,float b,float x,float w){return smoothstep(a-w,a+w,x)-smoothstep(b-w,b+w,x);}\n' + s.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  totalEmissiveRadiance += uNight * diffuseColor.rgb * vec3(.04, .045, .07); /* v35: city clay keeps a hint of its colour at night (no black slabs) */
   if (abs(vWN.y) < .5) {
     float u = (abs(vWN.x) > abs(vWN.z) ? vWP.z : vWP.x) / 2.8, v = vWP.y / 3.3;
     vec2 cell = floor(vec2(u, v)), f = fract(vec2(u, v));
